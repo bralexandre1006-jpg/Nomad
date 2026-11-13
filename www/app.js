@@ -14,8 +14,8 @@
   const Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
 
   const state = (() => {
-    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null, unit: 'n', mode: 'globe' };
-    try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return d; }
+    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null, unit: 'n', mode: 'globe', years: {} };
+    try { const s = { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; s.years = s.years || {}; return s; } catch { return d; }
   })();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
   const isVisited = c => !!state.visited[c];
@@ -125,9 +125,10 @@
   $('#confirm-no').onclick = () => closeConfirm(false);
   $('#confirm').onclick = e => e.target.id === 'confirm' && closeConfirm(false);
 
-  function setVisited(code, on) {
+  function setVisited(code, on, year) {
     const c = byCode.get(code);
-    if (on) state.visited[code] = Date.now(); else delete state.visited[code];
+    if (on) { state.visited[code] = Date.now(); if (year) state.years[code] = year; }
+    else { delete state.visited[code]; delete state.years[code]; }
     save();
     renderCounters();
     updateVisitedUI(code);
@@ -482,6 +483,7 @@
     return m;
   }
   const plan = FlatMap($('#plan'), true);
+  new ResizeObserver(() => globe.resize()).observe($('#globe'));
   const mini = FlatMap($('#mini'), false);
 
   /* ---------- Passeport ---------- */
@@ -504,7 +506,7 @@
     }).join('');
     const recent = list.sort((a, b) => state.visited[b] - state.visited[a]).slice(0, 6);
     $('#recent').innerHTML = recent.length
-      ? recent.map(c => `<button data-open="${c}"><img src="${flagSrc(c)}" alt=""><span>${byCode.get(c).name}</span><i class="dot"></i></button>`).join('')
+      ? recent.map(c => `<button data-open="${c}"><img src="${flagSrc(c)}" alt=""><span>${byCode.get(c).name}</span>${state.years[c] ? `<em>${state.years[c]}</em>` : '<i class="dot"></i>'}</button>`).join('')
       : '<div class="empty">Aucun pays pour l\'instant. Touchez un pays sur la carte pour commencer.</div>';
     const photos = Object.values(photoCounts).reduce((s, v) => s + v, 0);
     const albums = Object.values(photoCounts).filter(v => v > 0).length;
@@ -553,7 +555,7 @@
       + '<li class="empty" hidden>Aucun pays trouvé</li>';
     ul.addEventListener('click', e => {
       const t = e.target.closest('[data-toggle]');
-      if (t) { if (navigator.vibrate) navigator.vibrate(8); return setVisited(t.dataset.toggle, !isVisited(t.dataset.toggle)); }
+      if (t) { if (navigator.vibrate) navigator.vibrate(8); return toggleVisit(t.dataset.toggle); }
       const o = e.target.closest('[data-open]');
       if (o) { closeFinder(); show('map'); setTimeout(() => openSheet(o.dataset.open), 120); }
     });
@@ -602,18 +604,46 @@
     const c = byCode.get(sheet.code);
     const v = isVisited(c.c);
     const n = sheet.photos.length;
+    const y = state.years[c.c];
     $('#sheet-flag').src = flagSrc(c.c);
     $('#sheet-name').textContent = c.name;
-    $('#sheet-sub').textContent = v
-      ? `Visité${state.visited[c.c] > 1 ? ' · ajouté le ' + new Date(state.visited[c.c]).toLocaleDateString('fr-FR') : ''}`
-      : 'Pas encore visité';
+    $('#sheet-sub').textContent = v ? (y ? `Visité · première visite en ${y}` : 'Visité') : 'Pas encore visité';
     const btn = $('#visit-btn');
     btn.classList.toggle('on', v);
     btn.innerHTML = v ? `${CHECK}<span>Visité</span>` : '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Marquer comme visité</span>';
+    $('#year-row').hidden = !v;
+    $('#year-value').textContent = y || 'Ajouter';
     $('#album-count').textContent = n ? `${n} photo${n > 1 ? 's' : ''}` : '';
+    $('#hl-label').textContent = n ? c.name : 'Vide';
+    $('#hl-open').classList.toggle('empty', !n);
   }
 
-  function revokeUrls() { sheet.urls.forEach(u => URL.revokeObjectURL(u)); sheet.urls = []; }
+  const outlineCache = new Map();
+  function outline(code) {
+    if (outlineCache.has(code)) return outlineCache.get(code);
+    const geo = GEO.get(code);
+    let best = null, area = -1;
+    geo.feats.forEach(f => {
+      const g = f.geometry;
+      (g.type === 'MultiPolygon' ? g.coordinates : g.type === 'Polygon' ? [g.coordinates] : []).forEach(c => {
+        const p = { type: 'Polygon', coordinates: c };
+        const a = d3.geoArea(p);
+        if (a > area) { area = a; best = p; }
+      });
+    });
+    let d = '';
+    if (best) {
+      const ctr = d3.geoCentroid(best);
+      const pr = d3.geoAzimuthalEqualArea().rotate([-ctr[0], -ctr[1]]).fitExtent([[18, 18], [82, 82]], best);
+      d = d3.geoPath(pr)(best);
+    }
+    outlineCache.set(code, d);
+    return d;
+  }
+  const shapeSVG = code => {
+    const d = outline(code);
+    return d ? `<path d="${d}"/>` : `<image href="${flagSrc(code)}" x="20" y="30" width="60" height="40"/>`;
+  };
 
   async function loadAlbum() {
     const code = sheet.code;
@@ -621,25 +651,47 @@
     try { photos = await PhotoDB.byCountry(code); } catch {}
     if (code !== sheet.code) return;
     sheet.photos = photos;
-    revokeUrls();
-    const album = $('#album');
-    album.innerHTML = '<button class="add" id="add-photo"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Ajouter</button>';
-    photos.forEach((p, i) => {
-      const u = URL.createObjectURL(p.thumb || p.blob);
-      sheet.urls.push(u);
-      const img = document.createElement('img');
-      img.src = u; img.alt = ''; img.dataset.i = i; img.decoding = 'async';
-      album.appendChild(img);
-    });
     renderSheetHead();
   }
+
+  async function toggleVisit(code) {
+    if (isVisited(code)) return setVisited(code, false);
+    const y = await pickYear(code);
+    if (y === undefined) return;
+    setVisited(code, true, y);
+  }
+
+  let yearResolve = null;
+  function pickYear(code, current) {
+    const c = byCode.get(code);
+    const now = new Date().getFullYear();
+    $('#years-sub').textContent = `En quelle année as-tu visité ce pays pour la première fois ? (${c.name})`;
+    $('#years-grid').innerHTML = d3.range(now, 1939, -1).map(y => `<button data-y="${y}"${y === current ? ' class="on"' : ''}>${y}</button>`).join('');
+    $('#years').classList.add('show');
+    $('#years-grid').scrollTop = 0;
+    return new Promise(r => { yearResolve = r; });
+  }
+  const closeYears = v => { $('#years').classList.remove('show'); yearResolve && yearResolve(v); yearResolve = null; };
+  $('#years-grid').addEventListener('click', e => { const b = e.target.closest('[data-y]'); b && closeYears(+b.dataset.y); });
+  $('#years-skip').onclick = () => closeYears(null);
+  $('#years-cancel').onclick = () => closeYears(undefined);
+  $('#years').onclick = e => e.target.id === 'years' && closeYears(undefined);
+  $('#year-row').onclick = async () => {
+    const code = sheet.code;
+    const y = await pickYear(code, state.years[code]);
+    if (y === undefined) return;
+    if (y) state.years[code] = y; else delete state.years[code];
+    save();
+    renderSheetHead();
+    renderPassport();
+  };
 
   function openSheet(code) {
     if (!byCode.has(code)) return;
     sheet.code = code;
     sheet.photos = [];
     sheet.open = true;
-    $('#album').innerHTML = '';
+    $('#hl-shape').innerHTML = shapeSVG(code);
     renderSheetHead();
     sheetEl.style.transform = '';
     sheetEl.classList.add('show');
@@ -656,13 +708,13 @@
     $('#scrim').classList.remove('show');
     globe.selected = null; globe.dirty = true;
     plan.select(null);
-    setTimeout(() => { if (!sheet.open) { revokeUrls(); $('#album').innerHTML = ''; } }, 400);
+    setTimeout(() => { if (!sheet.open) sheet.photos = []; }, 400);
   }
   $('#scrim').onclick = closeSheet;
   $('#sheet-close').onclick = closeSheet;
   $('#visit-btn').onclick = () => {
     if (navigator.vibrate) navigator.vibrate(12);
-    setVisited(sheet.code, !isVisited(sheet.code));
+    toggleVisit(sheet.code);
   };
 
   (() => {
@@ -682,11 +734,8 @@
     });
   })();
 
-  $('#album').addEventListener('click', e => {
-    if (e.target.closest('#add-photo')) return $('#file').click();
-    const img = e.target.closest('img[data-i]');
-    if (img) openViewer(+img.dataset.i);
-  });
+  $('#add-photo').onclick = () => $('#file').click();
+  $('#hl-open').onclick = () => (sheet.photos.length ? openViewer(0) : $('#file').click());
 
   async function resize(file, max, q) {
     let src;
@@ -712,8 +761,8 @@
     e.target.value = '';
     if (!files.length) return;
     const code = sheet.code;
-    const album = $('#album');
-    const ph = files.map(() => { const d = document.createElement('div'); d.className = 'loading'; album.appendChild(d); return d; });
+    $('#hl-open').classList.add('loading');
+    $('#hl-label').textContent = 'Import…';
     let ok = 0;
     for (const f of files) {
       try {
@@ -722,7 +771,7 @@
         ok++;
       } catch {}
     }
-    ph.forEach(d => d.remove());
+    $('#hl-open').classList.remove('loading');
     photoCounts[code] = (photoCounts[code] || 0) + ok;
     renderPhotoCounts();
     if (ok < files.length) toast(`${files.length - ok} photo(s) n'ont pas pu être ajoutées`);
@@ -731,72 +780,102 @@
     if (sheet.code === code && sheet.open) loadAlbum();
   });
 
-  /* ---------- Visionneuse ---------- */
-  const viewer = { open: false, i: 0, urls: [] };
-  const track = $('#viewer-track');
+  /* ---------- Visionneuse (stories) ---------- */
+  const DUR = 5000;
+  const story = { open: false, i: 0, urls: {}, t0: 0, elapsed: 0, paused: true, ready: false };
+  const sImg = $('#story-img');
   function openViewer(i) {
-    viewer.open = true;
-    viewer.i = i;
-    track.innerHTML = sheet.photos.map(() => '<div><img alt=""></div>').join('');
+    story.open = true;
+    $('#story-bars').innerHTML = sheet.photos.map(() => '<i><b></b></i>').join('');
+    $('#story-shape').innerHTML = shapeSVG(sheet.code);
+    $('#story-name').textContent = byCode.get(sheet.code).name;
     $('#viewer').classList.add('show');
     $('#viewer').setAttribute('aria-hidden', 'false');
-    goTo(i, false);
+    goStory(i);
+    requestAnimationFrame(storyLoop);
   }
-  function ensureImg(i) {
-    const slide = track.children[i];
-    if (!slide) return;
-    const img = slide.firstChild;
-    if (!img.src) {
-      const u = URL.createObjectURL(sheet.photos[i].blob);
-      viewer.urls.push(u);
-      img.src = u;
-    }
-  }
-  function goTo(i, animate = true) {
+  const urlFor = i => {
+    const p = sheet.photos[i];
+    if (!p) return null;
+    return story.urls[p.id] || (story.urls[p.id] = URL.createObjectURL(p.blob));
+  };
+  function goStory(i) {
     const n = sheet.photos.length;
-    viewer.i = Math.max(0, Math.min(n - 1, i));
-    [viewer.i - 1, viewer.i, viewer.i + 1].forEach(ensureImg);
-    track.style.transition = animate ? 'transform .3s cubic-bezier(.2,.8,.2,1)' : 'none';
-    track.style.transform = `translateX(${-viewer.i * window.innerWidth}px)`;
-    $('#viewer-index').textContent = `${viewer.i + 1} / ${n}`;
+    if (i >= n) return closeViewer();
+    story.i = Math.max(0, i);
+    story.elapsed = 0; story.paused = false; story.ready = false;
+    const p = sheet.photos[story.i];
+    sImg.onload = () => { story.ready = true; story.t0 = performance.now(); };
+    sImg.src = urlFor(story.i);
+    urlFor(story.i + 1);
+    $('#story-date').textContent = new Date(p.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    $$('#story-bars b').forEach((b, k) => { b.style.width = k < story.i ? '100%' : '0%'; });
   }
+  function progress() {
+    if (!story.ready) return 0;
+    return story.elapsed + (story.paused ? 0 : performance.now() - story.t0);
+  }
+  function storyLoop() {
+    if (!story.open) return;
+    const k = Math.min(1, progress() / DUR);
+    const bar = $$('#story-bars b')[story.i];
+    if (bar) bar.style.width = k * 100 + '%';
+    if (k >= 1) goStory(story.i + 1);
+    requestAnimationFrame(storyLoop);
+  }
+  const pause = () => { if (!story.paused) { story.elapsed = progress(); story.paused = true; } };
+  const resume = () => { if (story.paused) { story.paused = false; story.t0 = performance.now(); } };
   function closeViewer() {
-    viewer.open = false;
+    story.open = false;
     $('#viewer').classList.remove('show');
     $('#viewer').setAttribute('aria-hidden', 'true');
-    setTimeout(() => { if (!viewer.open) { viewer.urls.forEach(u => URL.revokeObjectURL(u)); viewer.urls = []; track.innerHTML = ''; } }, 300);
+    $('#viewer').style.transform = '';
+    setTimeout(() => {
+      if (story.open) return;
+      Object.values(story.urls).forEach(u => URL.revokeObjectURL(u));
+      story.urls = {}; sImg.removeAttribute('src');
+    }, 300);
   }
   $('#viewer-close').onclick = closeViewer;
   $('#viewer-delete').onclick = async () => {
-    if (!await ask('Supprimer cette photo de l\'album ?', 'Supprimer')) return;
-    const p = sheet.photos[viewer.i];
-    try { await PhotoDB.remove(p.id); } catch { return toast('Suppression impossible'); }
+    pause();
+    if (!await ask('Supprimer cette photo de l\'album ?', 'Supprimer')) return resume();
+    const p = sheet.photos[story.i];
+    try { await PhotoDB.remove(p.id); } catch { resume(); return toast('Suppression impossible'); }
+    if (story.urls[p.id]) { URL.revokeObjectURL(story.urls[p.id]); delete story.urls[p.id]; }
     photoCounts[sheet.code] = Math.max(0, (photoCounts[sheet.code] || 1) - 1);
     renderPhotoCounts();
-    const i = viewer.i;
-    closeViewer();
+    const i = story.i;
     await loadAlbum();
-    if (sheet.photos.length) setTimeout(() => openViewer(Math.min(i, sheet.photos.length - 1)), 320);
+    if (!sheet.photos.length) return closeViewer();
+    $('#story-bars').innerHTML = sheet.photos.map(() => '<i><b></b></i>').join('');
+    goStory(Math.min(i, sheet.photos.length - 1));
   };
   (() => {
-    let x0 = null, dx = 0, multi = 0;
-    track.addEventListener('pointerdown', e => { multi++; if (multi > 1) return; x0 = e.clientX; dx = 0; track.style.transition = 'none'; });
-    track.addEventListener('pointermove', e => {
-      if (x0 === null || multi > 1) return;
-      dx = e.clientX - x0;
-      const edge = (viewer.i === 0 && dx > 0) || (viewer.i === sheet.photos.length - 1 && dx < 0);
-      track.style.transform = `translateX(${-viewer.i * window.innerWidth + dx * (edge ? 0.35 : 1)}px)`;
+    const tap = $('#story-tap');
+    let g = null;
+    tap.addEventListener('pointerdown', e => {
+      tap.setPointerCapture(e.pointerId);
+      g = { x: e.clientX, y: e.clientY, t: performance.now(), dy: 0 };
+      pause();
     });
-    const end = () => {
-      multi = Math.max(0, multi - 1);
-      if (x0 === null) return;
-      x0 = null;
-      const w = window.innerWidth;
-      if (Math.abs(dx) < 8) return goTo(viewer.i);
-      goTo(dx < -w * 0.18 ? viewer.i + 1 : dx > w * 0.18 ? viewer.i - 1 : viewer.i);
+    tap.addEventListener('pointermove', e => {
+      if (!g) return;
+      g.dy = Math.max(0, e.clientY - g.y);
+      if (g.dy > 10) $('#viewer').style.transform = `translateY(${g.dy}px) scale(${1 - g.dy / 2000})`;
+    });
+    const end = e => {
+      if (!g) return;
+      const quick = performance.now() - g.t < 250 && Math.abs(e.clientX - g.x) < 12 && g.dy < 12;
+      const dy = g.dy;
+      g = null;
+      $('#viewer').style.transform = '';
+      if (dy > 110) return closeViewer();
+      if (quick) return goStory(e.clientX < window.innerWidth / 3 ? story.i - 1 : story.i + 1);
+      resume();
     };
-    track.addEventListener('pointerup', end);
-    track.addEventListener('pointercancel', end);
+    tap.addEventListener('pointerup', end);
+    tap.addEventListener('pointercancel', end);
   })();
 
   /* ---------- Réglages ---------- */
@@ -849,7 +928,8 @@
       const head = JSON.stringify({
         app: 'nomad', format: 1, exportedAt: new Date().toISOString(),
         settings: { color: state.color, theme: state.theme, autoRotate: state.autoRotate },
-        visited: state.visited
+        visited: state.visited,
+        years: state.years
       });
       const FS = Plugins.Filesystem, Share = Plugins.Share;
       const native = FS && Share && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
@@ -901,6 +981,7 @@
     let ok = 0;
     try {
       codes.forEach(c => { if (!state.visited[c]) state.visited[c] = Number(data.visited[c]) || Date.now(); });
+      Object.entries(data.years || {}).forEach(([c, y]) => { if (byCode.has(c) && !state.years[c] && Number(y) > 1900) state.years[c] = Number(y); });
       const s = data.settings || {};
       if (/^#[0-9a-f]{6}$/i.test(s.color)) state.color = s.color;
       if (['auto', 'light', 'dark'].includes(s.theme)) state.theme = s.theme;
@@ -930,7 +1011,8 @@
     Plugins.App && Plugins.App.addListener('backButton', () => {
       if ($('#confirm').classList.contains('show')) return closeConfirm(false);
       if ($('#onboard').classList.contains('show')) { if (!onboardFirst) closeOnboard(); return; }
-      if (viewer.open) return closeViewer();
+      if ($('#years').classList.contains('show')) return closeYears(undefined);
+      if (story.open) return closeViewer();
       if (finderOpen()) return closeFinder();
       if (sheet.open) return closeSheet();
       if (current !== 'map') return show('map');
@@ -945,7 +1027,7 @@
     const proj = d3.geoOrthographic().clipAngle(90);
     const path = d3.geoPath(proj, ctx);
     const C = { ocean: '#141414', ocean2: '#262626', land: '#D9D9D9', line: '#141414' };
-    const stars = d3.range(26).map(() => [Math.random(), Math.random(), 0.6 + Math.random() * 1.2, Math.random()]);
+    const stars = d3.range(120).map(() => [Math.random(), Math.random(), 0.4 + Math.random() * 1.3, Math.random()]);
     let W, H, dpr, skip = false;
     const size = () => {
       const r = el.getBoundingClientRect();
@@ -953,16 +1035,17 @@
       W = r.width; H = r.height;
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     };
-    function draw(rot, R, alpha, hl, fast) {
-      const X = W / 2, Y = H / 2 - 30;
+    function draw(rot, f, alpha, hl, fast) {
+      if (el.clientWidth !== W || el.clientHeight !== H) size();
+      const X = W / 2, Y = H / 2 - 30, R = Math.min(W, H) * 0.24 * f;
       const G = fast ? LO : HI;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
       ctx.globalAlpha = alpha;
       stars.forEach(([sx, sy, sr, ph]) => {
-        const x = X + (sx - 0.5) * R * 3.2, y = Y + (sy - 0.5) * R * 3.2;
-        if (Math.hypot(x - X, y - Y) < R * 1.12) return;
-        ctx.globalAlpha = alpha * (0.35 + 0.45 * Math.abs(Math.sin(ph * 6 + rot[0] / 40)));
+        const x = sx * W, y = sy * H;
+        if (Math.hypot(x - X, y - Y) < R * 1.08) return;
+        ctx.globalAlpha = alpha * (0.25 + 0.6 * Math.abs(Math.sin(ph * 6 + performance.now() / 900)));
         ctx.beginPath(); ctx.arc(x, y, sr, 0, Math.PI * 2); ctx.fillStyle = C.land; ctx.fill();
       });
       ctx.globalAlpha = alpha;
@@ -1000,23 +1083,23 @@
       document.body.classList.add('intro');
       size();
       globe.lookAt(code, geo.small ? 2.2 : 1);
-      const R = Math.min(W, H) * 0.24;
       const target = [-geo.center[0], 0];
       const close = [target[0], Math.max(-70, Math.min(70, -geo.center[1]))];
       const from = [target[0] - 720, 0];
       const spin = d3.interpolate(from, target);
-      $('#intro-name').animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }],
-        { duration: 900, delay: 500, easing: 'ease-out', fill: 'both' });
+      const name = $('#intro-name');
+      name.getAnimations().forEach(a => a.cancel());
+      name.innerHTML = 'NOMAD'.split('').map((l, i) => `<span style="--i:${i}">${l}</span>`).join('');
       await run(3200, (e, k) => {
         const appear = d3.easeBackOut.overshoot(1.3)(Math.min(1, k / 0.22));
-        draw(spin(e), R * Math.max(0.01, appear), Math.min(1, k / 0.15), 0, true);
+        draw(spin(e), Math.max(0.01, appear), Math.min(1, k / 0.15), 0, true);
       }, d3.easeCubicOut);
-      await run(650, e => draw(target, R, 1, e, false), d3.easeCubicInOut);
+      await run(650, e => draw(target, 1, 1, e, false), d3.easeCubicInOut);
       if (!skip) await wait(450);
       const veil = $('#veil');
       $('#intro-name').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
       await run(1300, (e, k) => {
-        draw(d3.interpolate(target, close)(Math.min(1, e * 2.5)), R * (1 + 34 * e), 1, 1, true);
+        draw(d3.interpolate(target, close)(Math.min(1, e * 2.5)), 1 + 34 * e, 1, 1, true);
         veil.style.opacity = Math.max(0, (k - 0.45) / 0.55);
       }, d3.easeCubicIn);
       veil.style.opacity = 1;
@@ -1081,7 +1164,6 @@
     plan.invalidate(); mini.invalidate();
     if (current === 'map' && state.mode === 'plan') plan.init();
     if (current === 'passport') mini.init();
-    if (viewer.open) goTo(viewer.i, false);
   });
   PhotoDB.counts().then(c => { photoCounts = c; renderPhotoCounts(); }).catch(() => {});
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});

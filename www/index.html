@@ -161,21 +161,43 @@
       <button class="icon-btn" id="sheet-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
     <button id="visit-btn" class="visit-btn"></button>
+    <button class="year-row" id="year-row" hidden><span>Première visite</span><b id="year-value"></b></button>
     <div class="album-head">
       <h4>Album</h4>
       <span id="album-count"></span>
     </div>
-    <div id="album" class="album"></div>
+    <div class="highlights">
+      <button class="hl" id="hl-open"><span class="hl-ring"><svg id="hl-shape" viewBox="0 0 100 100"></svg></span><small id="hl-label"></small></button>
+      <button class="hl" id="add-photo"><span class="hl-ring add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><small>Ajouter</small></button>
+    </div>
     <input type="file" id="file" accept="image/*" multiple hidden>
   </section>
 
   <div id="viewer" aria-hidden="true">
-    <div class="viewer-top">
-      <button class="icon-btn" id="viewer-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-      <span id="viewer-index"></span>
-      <button class="icon-btn" id="viewer-delete" aria-label="Supprimer la photo"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+    <img id="story-img" alt="">
+    <div class="story-shade"></div>
+    <div class="story-head">
+      <div class="story-bars" id="story-bars"></div>
+      <div class="story-top">
+        <span class="story-av"><svg viewBox="0 0 100 100" id="story-shape"></svg></span>
+        <div class="story-meta"><b id="story-name"></b><span id="story-date"></span></div>
+        <button class="story-btn" id="viewer-delete" aria-label="Supprimer la photo"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+        <button class="story-btn" id="viewer-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
     </div>
-    <div id="viewer-track"></div>
+    <div class="story-tap" id="story-tap"></div>
+  </div>
+
+  <div id="years" aria-hidden="true">
+    <div class="years-box">
+      <h3>Première visite</h3>
+      <p id="years-sub"></p>
+      <div class="years-grid" id="years-grid"></div>
+      <div class="years-actions">
+        <button id="years-cancel">Annuler</button>
+        <button id="years-skip">Je ne sais plus</button>
+      </div>
+    </div>
   </div>
 
   <div id="intro">
