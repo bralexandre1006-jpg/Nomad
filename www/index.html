@@ -10,26 +10,64 @@
 <body>
 <div id="app">
   <main id="views">
-    <section class="view view-full active" data-view="globe">
+    <!-- CARTE -->
+    <section class="view view-full active" data-view="map">
       <canvas id="globe" aria-label="Globe interactif"></canvas>
-      <div class="hud"><div class="counter-card" data-counter></div></div>
-      <button class="fab" id="recenter" aria-label="Réinitialiser la vue">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
-      </button>
+      <canvas id="plan" aria-label="Carte du monde" hidden></canvas>
+      <div class="map-top">
+        <button class="searchbar" id="open-finder">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <span>Rechercher un pays</span>
+        </button>
+        <button class="count-pill" data-goto="passport"><b data-n></b><span>/<i data-total></i></span></button>
+      </div>
+      <div class="map-bottom">
+        <button class="round-btn" id="recenter" aria-label="Recentrer">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
+        </button>
+        <div class="seg" id="mode">
+          <button class="active" data-mode="globe">Globe</button>
+          <button data-mode="plan">Plan</button>
+        </div>
+        <span class="round-spacer"></span>
+      </div>
     </section>
 
-    <section class="view view-full" data-view="map">
-      <svg id="map" aria-label="Carte du monde"></svg>
-      <div class="hud"><div class="counter-card" data-counter></div></div>
-      <button class="fab" id="map-reset" aria-label="Réinitialiser le zoom">
-        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
-      </button>
+    <!-- PASSEPORT -->
+    <section class="view" data-view="passport">
+      <div class="scroll passport">
+        <div class="pp-head">
+          <span class="eyebrow">Votre passeport</span>
+          <div class="seg small" id="unit">
+            <button data-unit="n">123</button>
+            <button data-unit="pct">%</button>
+          </div>
+        </div>
+        <div class="big-num" id="big-num"></div>
+        <div class="big-track"><i id="big-bar"></i></div>
+        <p class="big-sub">pays visités</p>
+
+        <button class="card mini-map" data-goto-plan aria-label="Ouvrir la carte"><canvas id="mini"></canvas></button>
+
+        <div class="stats">
+          <div class="stat"><span>Pays</span><b data-n></b><small>sur <i data-total></i></small></div>
+          <div class="stat"><span>Continents</span><b id="st-cont"></b><small>sur 6</small></div>
+          <div class="stat"><span>Photos</span><b id="st-photos"></b><small id="st-albums"></small></div>
+        </div>
+
+        <h3 class="section">Par continent</h3>
+        <div class="card" id="by-continent"></div>
+
+        <h3 class="section">Derniers pays débloqués</h3>
+        <div class="card list-card" id="recent"></div>
+      </div>
     </section>
 
+    <!-- DRAPEAUX -->
     <section class="view" data-view="flags">
       <header class="topbar">
-        <h1>Drapeaux</h1>
-        <span class="chip-count" data-count></span>
+        <div><span class="eyebrow">Collection</span><h1>Drapeaux</h1></div>
+        <span class="chip-count"><b data-n></b>/<i data-total></i></span>
       </header>
       <div class="filters" data-filter-group="flags">
         <button class="pill active" data-filter="all">Tous</button>
@@ -39,37 +77,21 @@
       <div class="scroll"><div id="flag-grid" class="flag-grid"></div></div>
     </section>
 
-    <section class="view" data-view="list">
-      <header class="topbar">
-        <h1>Pays</h1>
-        <span class="chip-count" data-count></span>
-      </header>
-      <div class="search">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-        <input id="search" type="search" placeholder="Rechercher un pays" autocomplete="off">
-      </div>
-      <div class="filters" data-filter-group="list">
-        <button class="pill active" data-filter="all">Tous</button>
-        <button class="pill" data-filter="visited">Visités</button>
-        <button class="pill" data-filter="todo">À découvrir</button>
-      </div>
-      <div class="scroll"><ul id="country-list" class="country-list"></ul></div>
-    </section>
-
+    <!-- RÉGLAGES -->
     <section class="view" data-view="settings">
-      <header class="topbar"><h1>Réglages</h1></header>
+      <header class="topbar"><div><span class="eyebrow">Profil</span><h1>Réglages</h1></div></header>
       <div class="scroll settings">
-        <div class="brand">
+        <div class="card brand">
           <img src="img/logo.png" alt="">
           <div><strong>Nomad</strong><span data-counter-text></span></div>
         </div>
 
-        <h2>Mon pays</h2>
+        <h3 class="section">Mon pays</h3>
         <div class="card">
           <button class="row" id="home-row"><span>Pays d'origine</span><span class="hint" id="home-value"></span></button>
         </div>
 
-        <h2>Couleur des pays visités</h2>
+        <h3 class="section">Couleur des pays visités</h3>
         <div class="card">
           <div id="swatches" class="swatches"></div>
           <label class="row">
@@ -78,9 +100,9 @@
           </label>
         </div>
 
-        <h2>Apparence</h2>
+        <h3 class="section">Apparence</h3>
         <div class="card">
-          <div class="segmented" id="theme">
+          <div class="seg block" id="theme">
             <button data-theme="auto">Auto</button>
             <button data-theme="light">Clair</button>
             <button data-theme="dark">Sombre</button>
@@ -91,7 +113,7 @@
           </label>
         </div>
 
-        <h2>Données</h2>
+        <h3 class="section">Données</h3>
         <div class="card">
           <button class="row" id="export"><span>Exporter mes données</span><span class="hint">JSON</span></button>
           <button class="row" id="import"><span>Importer des données</span><span class="hint">JSON</span></button>
@@ -104,12 +126,28 @@
   </main>
 
   <nav id="tabbar">
-    <button class="tab active" data-tab="globe"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span>Globe</span></button>
-    <button class="tab" data-tab="map"><svg viewBox="0 0 24 24"><path d="m9 4-6 2v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg><span>Carte</span></button>
-    <button class="tab" data-tab="flags"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span>Drapeaux</span></button>
-    <button class="tab" data-tab="list"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Pays</span></button>
-    <button class="tab" data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Réglages</span></button>
+    <button class="tab active" data-tab="map"><i><svg viewBox="0 0 24 24"><path d="m9 4-6 2v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg></i><span>Carte</span></button>
+    <button class="tab" data-tab="passport"><i><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M9 16h6"/></svg></i><span>Passeport</span></button>
+    <button class="tab" data-tab="flags"><i><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></i><span>Drapeaux</span></button>
+    <button class="tab" data-tab="settings"><i><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></i><span>Profil</span></button>
   </nav>
+
+  <!-- RECHERCHE -->
+  <section id="finder" aria-hidden="true">
+    <div class="finder-top">
+      <div class="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="search" type="search" placeholder="Rechercher un pays" autocomplete="off">
+      </div>
+      <button class="link" id="finder-close">Fermer</button>
+    </div>
+    <div class="filters" data-filter-group="list">
+      <button class="pill active" data-filter="all">Tous</button>
+      <button class="pill" data-filter="visited">Visités</button>
+      <button class="pill" data-filter="todo">À découvrir</button>
+    </div>
+    <div class="scroll"><ul id="country-list" class="country-list"></ul></div>
+  </section>
 
   <div id="scrim"></div>
   <section id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-name">
@@ -174,6 +212,7 @@
 <script src="vendor/topojson-client.min.js"></script>
 <script src="data/world.js"></script>
 <script src="data/countries.js"></script>
+<script src="data/continents.js"></script>
 <script src="db.js"></script>
 <script src="app.js"></script>
 </body>

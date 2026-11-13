@@ -2,6 +2,7 @@ node_modules/
 www/vendor/
 www/flags/
 www/data/
+www/fonts/
 *.keystore
 *.jks
 keystore.properties

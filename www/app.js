@@ -3,58 +3,74 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const COUNTRIES = window.NOMAD_COUNTRIES;
+  const CONT = window.NOMAD_CONTINENTS;
   const TOTAL = COUNTRIES.length;
   const byCode = new Map(COUNTRIES.map(c => [c.c, c]));
   const byNum = new Map(COUNTRIES.map(c => [c.n, c]));
-  const PRESETS = ['#E8704F', '#E3A33B', '#6FA387', '#2BA3A0', '#4C7BD9', '#8B6CD6', '#D9629A', '#D2453E'];
+  const PRESETS = ['#2EBD59', '#F6BF26', '#E8704F', '#2BA3A0', '#4C7BD9', '#8B6CD6', '#D9629A', '#D2453E'];
   const KEY = 'nomad.v1';
   const flagSrc = c => `flags/${c.toLowerCase()}.svg`;
   const CHECK = '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>';
   const Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
 
   const state = (() => {
-    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null };
+    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null, unit: 'n', mode: 'globe' };
     try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return d; }
   })();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
   const isVisited = c => !!state.visited[c];
-  const visitedCount = () => Object.keys(state.visited).filter(c => byCode.has(c)).length;
+  const visitedList = () => Object.keys(state.visited).filter(c => byCode.has(c));
+  const visitedCount = () => visitedList().length;
   let photoCounts = {};
 
-  /* ---------- Géographie ---------- */
-  const topo = window.NOMAD_WORLD;
   const ALIASES = { PS: 'israel' };
-  const searchKey = c => (c.name + ' ' + (ALIASES[c.c] || '')).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const geoms = topo.objects.countries.geometries;
-  const merged = ['376', '275'];
-  const features = topojson.feature(topo, { type: 'GeometryCollection', geometries: geoms.filter(g => !merged.includes(g.id)) }).features;
-  features.push({ type: 'Feature', id: '275', properties: {}, geometry: topojson.merge(topo, geoms.filter(g => merged.includes(g.id))) });
-  features.forEach(f => { f.country = byNum.get(f.id) || null; });
-  if (!features.some(f => f.id === '798')) {
-    features.push({ type: 'Feature', id: '798', country: byNum.get('798'), geometry: { type: 'Point', coordinates: [179.2, -8.52] } });
+  const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const searchKey = c => norm(c.name + ' ' + (ALIASES[c.c] || ''));
+
+  /* ---------- Géographie ---------- */
+  function buildGeo(topo) {
+    const obj = topo.objects.countries;
+    const codeOf = id => { const c = byNum.get(id === '376' ? '275' : id); return c ? c.c : null; };
+    const byC = new Map();
+    topojson.feature(topo, obj).features.forEach(f => {
+      f.code = codeOf(f.id);
+      if (!f.code) return;
+      if (!byC.has(f.code)) byC.set(f.code, []);
+      byC.get(f.code).push(f);
+    });
+    const ip = (a, b) => (a.id === '376' && b.id === '275') || (a.id === '275' && b.id === '376');
+    return {
+      byC,
+      land: topojson.feature(topo, topo.objects.land),
+      borders: topojson.mesh(topo, obj, (a, b) => a !== b && !ip(a, b))
+    };
   }
-  const mainPoint = f => {
-    const g = f.geometry;
-    if (g.type === 'Point') return g.coordinates;
-    if (g.type === 'MultiPolygon') {
-      let best = null, area = -1;
-      g.coordinates.forEach(c => {
+  const HI = buildGeo(window.NOMAD_WORLD);
+  const LO = buildGeo(window.NOMAD_WORLD110);
+  const largestCenter = feats => {
+    let best = null, area = -1;
+    feats.forEach(f => {
+      const g = f.geometry;
+      const polys = g.type === 'MultiPolygon' ? g.coordinates : g.type === 'Polygon' ? [g.coordinates] : [];
+      polys.forEach(c => {
         const p = { type: 'Polygon', coordinates: c };
         const a = d3.geoArea(p);
         if (a > area) { area = a; best = p; }
       });
-      return d3.geoCentroid(best);
-    }
-    return d3.geoCentroid(f);
+    });
+    return best ? d3.geoCentroid(best) : null;
   };
-  features.forEach(f => {
-    f.small = f.geometry.type === 'Point' || d3.geoArea(f) < 2.2e-4;
-    f.center = mainPoint(f);
+  const GEO = new Map();
+  COUNTRIES.forEach(c => {
+    const feats = HI.byC.get(c.c) || [];
+    const area = feats.reduce((s, f) => s + d3.geoArea(f), 0);
+    GEO.set(c.c, { feats, center: largestCenter(feats) || (c.c === 'TV' ? [179.2, -8.52] : [0, 0]), small: !feats.length || area < 2.2e-4 });
   });
-  const countryFeatures = features.filter(f => f.country);
-  const otherFeatures = features.filter(f => !f.country);
-  const smallFeatures = countryFeatures.filter(f => f.small);
-  const featByCode = new Map(countryFeatures.map(f => [f.country.c, f]));
+  const SMALL = COUNTRIES.map(c => c.c).filter(c => GEO.get(c).small);
+  const hitCountry = ll => {
+    for (const [code, g] of GEO) if (g.feats.some(f => d3.geoContains(f, ll))) return code;
+    return null;
+  };
 
   /* ---------- Thème ---------- */
   const colors = {};
@@ -62,7 +78,7 @@
   const inkFor = hex => {
     const n = parseInt(hex.slice(1), 16);
     const l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-    return l > 0.68 ? '#1E2638' : '#FFFFFF';
+    return l > 0.62 ? '#15142A' : '#FFFFFF';
   };
   function applyTheme() {
     const mode = state.theme === 'auto' ? (media.matches ? 'dark' : 'light') : state.theme;
@@ -71,23 +87,21 @@
     root.style.setProperty('--accent', state.color);
     root.style.setProperty('--accent-ink', inkFor(state.color));
     const cs = getComputedStyle(root);
-    ['ocean', 'ocean-2', 'land', 'graticule', 'accent', 'bg'].forEach(k => { colors[k] = cs.getPropertyValue('--' + k).trim(); });
-    colors.other = d3.interpolateRgb(colors.land, colors.ocean)(0.3);
+    ['ocean', 'ocean-2', 'land', 'border', 'graticule', 'accent', 'brand', 'bg'].forEach(k => { colors[k] = cs.getPropertyValue('--' + k).trim(); });
     try { Plugins.StatusBar && Plugins.StatusBar.setStyle({ style: mode === 'dark' ? 'DARK' : 'LIGHT' }); } catch {}
     globe.dirty = true;
+    plan.redraw();
+    mini.redraw();
   }
   media.addEventListener('change', () => state.theme === 'auto' && applyTheme());
 
   /* ---------- UI commune ---------- */
   function renderCounters() {
     const n = visitedCount();
-    const pct = Math.round(n / TOTAL * 100);
-    $$('[data-counter]').forEach(el => {
-      el.innerHTML = `<div class="num">${n} <small>/ ${TOTAL}</small></div>
-        <div class="lbl">pays visités · ${pct}%</div><div class="bar"><i style="width:${pct}%"></i></div>`;
-    });
-    $$('[data-count]').forEach(el => { el.textContent = `${n}/${TOTAL}`; });
+    $$('[data-n]').forEach(el => { el.textContent = n; });
+    $$('[data-total]').forEach(el => { el.textContent = TOTAL; });
     $$('[data-counter-text]').forEach(el => { el.textContent = `${n} pays visités sur ${TOTAL}`; });
+    renderPassport();
   }
 
   let toastTimer;
@@ -125,116 +139,137 @@
     $$(`[data-c="${code}"]`).forEach(el => el.classList.toggle('visited', on));
     $$(`.check[data-toggle="${code}"]`).forEach(el => el.classList.toggle('on', on));
     globe.dirty = true;
+    plan.redraw();
     if (sheet.code === code) renderSheetHead();
     applyListFilter();
     applyFlagFilter();
   }
 
   /* ---------- Navigation ---------- */
-  let current = 'globe';
+  let current = 'map';
   function show(view) {
     if (view === current) return;
     current = view;
     $$('.view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
     $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === view));
-    if (view === 'map') map.init();
     if (view === 'flags') buildFlags();
-    if (view === 'list') buildList();
-    globe.active = view === 'globe';
+    if (view === 'passport') { mini.init(); renderPassport(); }
+    syncMode();
+  }
+  function syncMode() {
+    const onMap = current === 'map';
+    $('#globe').hidden = state.mode !== 'globe';
+    $('#plan').hidden = state.mode !== 'plan';
+    $$('#mode button').forEach(b => b.classList.toggle('active', b.dataset.mode === state.mode));
+    globe.active = onMap && state.mode === 'globe';
     if (globe.active) { globe.resize(); globe.start(); }
+    if (onMap && state.mode === 'plan') plan.init();
   }
   $$('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
+  $$('[data-goto]').forEach(b => b.addEventListener('click', () => show(b.dataset.goto)));
+  $('[data-goto-plan]').addEventListener('click', () => { state.mode = 'plan'; save(); show('map'); syncMode(); });
+  $('#mode').addEventListener('click', e => {
+    const b = e.target.closest('[data-mode]');
+    if (!b || b.dataset.mode === state.mode) return;
+    state.mode = b.dataset.mode; save(); syncMode();
+  });
+  $('#recenter').onclick = () => (state.mode === 'globe' ? globe.reset() : plan.reset());
 
   /* ---------- Globe ---------- */
   const globe = (() => {
     const canvas = $('#globe');
     const ctx = canvas.getContext('2d');
-    const proj = d3.geoOrthographic().clipAngle(90).precision(0.6);
+    const proj = d3.geoOrthographic().clipAngle(90);
     const path = d3.geoPath(proj, ctx);
     const grat = d3.geoGraticule10();
-    const g = { dirty: true, active: true, running: false, selected: null };
+    const g = { dirty: true, active: true, running: false, selected: null, glow: 0, glowCode: null };
     let W = 0, H = 0, dpr = 1, base = 1, zoom = 1;
     const rot = [-8, -38, 0];
-    let vel = [0, 0], lastInteract = 0, anim = null;
+    let vel = [0, 0], lastInteract = 0, anim = null, hiPending = false;
 
     g.resize = () => {
       const r = canvas.getBoundingClientRect();
       if (!r.width) return;
-      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
       W = r.width; H = r.height;
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-      base = Math.min(W, H - 170) / 2 * 0.88;
+      base = Math.min(W, H - 200) / 2 * 0.9;
       g.dirty = true;
     };
-    const cy = () => H / 2 + 34;
+    const cy = () => H / 2 + 6;
     const radius = () => base * zoom;
+    const clampLat = v => Math.max(-85, Math.min(85, v));
 
-    function draw() {
-      proj.translate([W / 2, cy()]).scale(radius()).rotate(rot);
+    function draw(fast) {
+      const G = fast ? LO : HI;
+      const R = radius(), X = W / 2, Y = cy();
+      proj.translate([X, Y]).scale(R).rotate(rot).precision(fast ? 1.6 : 0.5);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
-      const R = radius(), X = W / 2, Y = cy();
 
-      const halo = ctx.createRadialGradient(X, Y, R * 0.9, X, Y, R * 1.18);
-      halo.addColorStop(0, colors.accent + '33');
-      halo.addColorStop(1, colors.accent + '00');
+      const halo = ctx.createRadialGradient(X, Y, R * 0.95, X, Y, R * 1.25);
+      halo.addColorStop(0, 'rgba(110, 130, 255, .30)');
+      halo.addColorStop(1, 'rgba(110, 130, 255, 0)');
       ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(X, Y, R * 1.18, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(X, Y, R * 1.25, 0, Math.PI * 2); ctx.fill();
 
       const sea = ctx.createRadialGradient(X - R * 0.35, Y - R * 0.4, R * 0.1, X, Y, R);
       sea.addColorStop(0, colors['ocean-2']);
       sea.addColorStop(1, colors.ocean);
-      ctx.beginPath(); path({ type: 'Sphere' }); ctx.fillStyle = sea; ctx.fill();
+      ctx.fillStyle = sea;
+      ctx.beginPath(); ctx.arc(X, Y, R, 0, Math.PI * 2); ctx.fill();
 
       ctx.beginPath(); path(grat); ctx.strokeStyle = colors.graticule; ctx.lineWidth = 0.7; ctx.stroke();
 
-      ctx.lineWidth = 0.6; ctx.strokeStyle = colors.ocean; ctx.lineJoin = 'round';
-      ctx.beginPath(); otherFeatures.forEach(f => path(f)); ctx.fillStyle = colors.other; ctx.fill(); ctx.stroke();
-      ctx.beginPath(); countryFeatures.forEach(f => !isVisited(f.country.c) && f.geometry.type !== 'Point' && path(f));
-      ctx.fillStyle = colors.land; ctx.fill(); ctx.stroke();
-      ctx.beginPath(); countryFeatures.forEach(f => isVisited(f.country.c) && f.geometry.type !== 'Point' && path(f));
-      ctx.fillStyle = colors.accent; ctx.fill(); ctx.stroke();
+      ctx.beginPath(); path(G.land); ctx.fillStyle = colors.land; ctx.fill();
+      ctx.beginPath();
+      visitedList().forEach(code => (G.byC.get(code) || []).forEach(f => path(f)));
+      ctx.fillStyle = colors.accent; ctx.fill();
+      ctx.beginPath(); path(G.borders); ctx.strokeStyle = colors.border; ctx.lineWidth = 0.6; ctx.lineJoin = 'round'; ctx.stroke();
 
       const c = proj.invert([X, Y]);
-      smallFeatures.forEach(f => {
-        if (d3.geoDistance(f.center, c) > Math.PI / 2 - 0.02) return;
-        const [x, y] = proj(f.center);
-        const v = isVisited(f.country.c);
+      SMALL.forEach(code => {
+        const ctr = GEO.get(code).center;
+        if (d3.geoDistance(ctr, c) > Math.PI / 2 - 0.02) return;
+        const [x, y] = proj(ctr);
+        const v = isVisited(code);
         ctx.beginPath(); ctx.arc(x, y, v ? 3.6 : 2.2, 0, Math.PI * 2);
         ctx.fillStyle = v ? colors.accent : colors.land; ctx.fill();
-        ctx.lineWidth = 1; ctx.strokeStyle = colors.ocean; ctx.stroke();
       });
 
       if (g.selected) {
-        const f = featByCode.get(g.selected);
-        if (f) {
-          ctx.lineWidth = 2.2; ctx.strokeStyle = isVisited(g.selected) ? colors.bg : colors.accent;
-          if (f.small) {
-            if (d3.geoDistance(f.center, c) < Math.PI / 2) {
-              const [x, y] = proj(f.center);
-              ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.stroke();
-            }
-          } else { ctx.beginPath(); path(f); ctx.stroke(); }
-        }
+        const geo = GEO.get(g.selected);
+        ctx.lineWidth = 2.2; ctx.strokeStyle = colors.brand;
+        if (geo.small) {
+          if (d3.geoDistance(geo.center, c) < Math.PI / 2) {
+            const [x, y] = proj(geo.center);
+            ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.stroke();
+          }
+        } else { ctx.beginPath(); (G.byC.get(g.selected) || geo.feats).forEach(f => path(f)); ctx.stroke(); }
       }
 
       if (g.glow > 0 && g.glowCode) {
-        const f = featByCode.get(g.glowCode);
-        if (f && d3.geoDistance(f.center, c) < Math.PI / 2) {
+        const geo = GEO.get(g.glowCode);
+        if (geo && d3.geoDistance(geo.center, c) < Math.PI / 2) {
           ctx.save();
           ctx.globalAlpha = Math.min(1, g.glow * 1.3);
           ctx.shadowColor = 'rgba(255, 214, 64, .95)';
           ctx.shadowBlur = 12 + 60 * g.glow;
           ctx.fillStyle = d3.interpolateRgb('#FFC93C', '#FFF6C8')(g.glow);
           ctx.beginPath();
-          if (f.small) { const [x, y] = proj(f.center); ctx.arc(x, y, 5 + 12 * g.glow, 0, Math.PI * 2); } else path(f);
+          if (geo.small) { const [x, y] = proj(geo.center); ctx.arc(x, y, 5 + 12 * g.glow, 0, Math.PI * 2); } else geo.feats.forEach(f => path(f));
           ctx.fill(); ctx.fill();
           ctx.restore();
         }
       }
 
-      ctx.beginPath(); path({ type: 'Sphere' });
-      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.stroke();
+      const shade = ctx.createRadialGradient(X - R * 0.3, Y - R * 0.35, R * 0.15, X, Y, R);
+      shade.addColorStop(0, 'rgba(255, 255, 255, .07)');
+      shade.addColorStop(0.65, 'rgba(0, 0, 0, 0)');
+      shade.addColorStop(1, 'rgba(0, 0, 0, .38)');
+      ctx.fillStyle = shade;
+      ctx.beginPath(); ctx.arc(X, Y, R, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(160, 175, 255, .22)'; ctx.stroke();
     }
 
     let prev = 0;
@@ -242,26 +277,32 @@
       if (!g.active || document.hidden) { g.running = false; return; }
       const dt = prev ? Math.min(t - prev, 50) : 16;
       prev = t;
+      let motion = false;
       if (anim) {
-        const k = Math.min(1, (t - anim.t0) / anim.dur);
+        const k = Math.min(1, (performance.now() - anim.t0) / anim.dur);
         const e = (anim.ease || d3.easeCubicInOut)(k);
         const r = anim.interp(e);
         rot[0] = r[0]; rot[1] = r[1];
         zoom = anim.z0 + (anim.z1 - anim.z0) * e;
+        g.dirty = motion = true;
         if (k >= 1) { const done = anim.done; anim = null; done && done(); }
-        g.dirty = true;
-      } else if (!pointers.size) {
-        if (Math.abs(vel[0]) > 0.01 || Math.abs(vel[1]) > 0.01) {
-          rot[0] += vel[0] * dt; rot[1] = clampLat(rot[1] + vel[1] * dt);
-          const f = Math.pow(0.94, dt / 16);
-          vel = [vel[0] * f, vel[1] * f];
-          g.dirty = true;
-        } else if (state.autoRotate && !sheet.open && t - lastInteract > 2500) {
-          rot[0] += 0.006 * dt;
-          g.dirty = true;
-        }
+      } else if (pointers.size) {
+        motion = true;
+      } else if (Math.abs(vel[0]) > 0.004 || Math.abs(vel[1]) > 0.004) {
+        rot[0] += vel[0] * dt; rot[1] = clampLat(rot[1] + vel[1] * dt);
+        const f = Math.pow(0.93, dt / 16);
+        vel = [vel[0] * f, vel[1] * f];
+        g.dirty = motion = true;
+      } else if (state.autoRotate && !sheet.open && performance.now() - lastInteract > 2500) {
+        rot[0] += 0.006 * dt;
+        g.dirty = motion = true;
       }
-      if (g.dirty) { g.dirty = false; draw(); }
+      if (motion) {
+        if (g.dirty) { draw(true); hiPending = true; }
+      } else if (g.dirty || hiPending) {
+        draw(false); hiPending = false;
+      }
+      g.dirty = false;
       requestAnimationFrame(frame);
     }
     g.start = () => {
@@ -271,10 +312,8 @@
     };
     document.addEventListener('visibilitychange', () => !document.hidden && g.active && g.start());
 
-    const clampLat = v => Math.max(-85, Math.min(85, v));
     const pointers = new Map();
     let gesture = null;
-
     canvas.addEventListener('pointerdown', e => {
       canvas.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -325,6 +364,7 @@
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       zoom = Math.max(0.75, Math.min(10, zoom * Math.exp(-e.deltaY * 0.0015)));
+      lastInteract = performance.now();
       g.dirty = true;
     }, { passive: false });
 
@@ -334,51 +374,49 @@
       proj.translate([X, Y]).scale(radius()).rotate(rot);
       const c = proj.invert([X, Y]);
       let best = null, bd = 18;
-      smallFeatures.forEach(f => {
-        if (d3.geoDistance(f.center, c) > Math.PI / 2) return;
-        const [px, py] = proj(f.center);
+      SMALL.forEach(code => {
+        const ctr = GEO.get(code).center;
+        if (d3.geoDistance(ctr, c) > Math.PI / 2) return;
+        const [px, py] = proj(ctr);
         const d = Math.hypot(px - x, py - y);
-        if (d < bd) { bd = d; best = f; }
+        if (d < bd) { bd = d; best = code; }
       });
-      if (!best) {
-        const ll = proj.invert([x, y]);
-        best = countryFeatures.find(f => f.geometry.type !== 'Point' && d3.geoContains(f, ll));
-      }
+      if (!best) best = hitCountry(proj.invert([x, y]));
       if (best) {
         if (navigator.vibrate) navigator.vibrate(8);
-        openSheet(best.country.c);
+        openSheet(best);
       }
     }
 
     g.focus = (code, zoomIn) => {
-      const f = featByCode.get(code);
+      const geo = GEO.get(code);
       g.selected = code;
       g.dirty = true;
-      if (!f) return;
-      const target = [-f.center[0], clampLat(-f.center[1])];
+      if (!geo || !g.active) return;
+      const target = [-geo.center[0], clampLat(-geo.center[1])];
       const from = [rot[0], rot[1]];
       target[0] = from[0] + ((((target[0] - from[0]) % 360) + 540) % 360 - 180);
-      anim = { t0: performance.now(), dur: 900, interp: d3.interpolate(from, target), z0: zoom, z1: zoomIn ? Math.max(zoom, f.small ? 3 : 1.6) : zoom };
+      anim = { t0: performance.now(), dur: 900, interp: d3.interpolate(from, target), z0: zoom, z1: zoomIn ? Math.max(zoom, geo.small ? 3 : 1.6) : zoom };
     };
     g.intro = code => new Promise(resolve => {
-      const f = featByCode.get(code);
-      if (!f) return resolve();
-      const target = [-f.center[0], clampLat(-f.center[1])];
+      const geo = GEO.get(code);
+      if (!geo) return resolve();
+      const target = [-geo.center[0], clampLat(-geo.center[1])];
       rot[0] = target[0] - 600; rot[1] = clampLat(target[1] + 35);
       zoom = 0.08; vel = [0, 0]; g.glow = 0; g.glowCode = code; g.dirty = true;
       g.intro.skip = () => { if (anim) anim.t0 = -1e9; };
       anim = {
         t0: performance.now(), dur: 3000, ease: d3.easeCubicOut,
-        interp: d3.interpolate([rot[0], rot[1]], target), z0: zoom, z1: f.small ? 3.4 : 1.7,
+        interp: d3.interpolate([rot[0], rot[1]], target), z0: zoom, z1: geo.small ? 3.4 : 1.4,
         done: resolve
       };
     });
     g.setGlow = v => { g.glow = v; g.dirty = true; };
     g.screenPoint = code => {
-      const f = featByCode.get(code);
-      if (!f) return [W / 2, cy()];
+      const geo = GEO.get(code);
+      if (!geo) return [W / 2, cy()];
       proj.translate([W / 2, cy()]).scale(radius()).rotate(rot);
-      return proj(f.center);
+      return proj(geo.center);
     };
     g.hold = ms => { lastInteract = performance.now() + ms; };
     g.reset = () => {
@@ -386,63 +424,124 @@
     };
     return g;
   })();
-  $('#recenter').onclick = () => globe.reset();
 
-  /* ---------- Carte ---------- */
-  const map = (() => {
-    const svg = d3.select('#map');
-    const m = { ready: false };
-    let zoomer, root, size = '';
+  /* ---------- Carte à plat (canvas) ---------- */
+  function FlatMap(canvas, interactive) {
+    const ctx = canvas.getContext('2d');
+    const m = { ready: false, selected: null };
+    let W = 0, H = 0, dpr = 1, proj, P = null, t = d3.zoomIdentity, zoomer = null, home = d3.zoomIdentity, raf = 0, key = '';
     m.init = () => {
-      const r = svg.node().getBoundingClientRect();
-      const key = `${Math.round(r.width)}x${Math.round(r.height)}`;
-      if (!r.width || (m.ready && key === size)) return;
-      size = key;
-      svg.selectAll('*').remove();
-      const W = r.width, H = r.height;
-      svg.attr('viewBox', `0 0 ${W} ${H}`);
-      const proj = d3.geoNaturalEarth1().fitSize([W, H], { type: 'Sphere' });
+      const r = canvas.getBoundingClientRect();
+      if (!r.width) return;
+      const k = `${Math.round(r.width)}x${Math.round(r.height)}`;
+      if (m.ready && k === key) return m.redraw();
+      key = k;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = r.width; H = r.height;
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+      proj = d3.geoNaturalEarth1();
+      if (interactive) proj.fitSize([W, H], { type: 'Sphere' });
+      else proj.fitExtent([[8, 8], [W - 8, H - 8]], { type: 'MultiPoint', coordinates: [[-168, -56], [180, 82], [-180, 82]] });
       const path = d3.geoPath(proj);
-      root = svg.append('g');
-      root.append('path').attr('class', 'sphere').attr('d', path({ type: 'Sphere' }));
-      root.append('path').attr('class', 'grat').attr('d', path(d3.geoGraticule10()));
-      root.append('g').selectAll('path').data(otherFeatures).join('path').attr('class', 'land other').attr('d', path);
-      root.append('g').selectAll('path').data(countryFeatures.filter(f => f.geometry.type !== 'Point')).join('path')
-        .attr('class', f => 'land' + (isVisited(f.country.c) ? ' visited' : ''))
-        .attr('data-c', f => f.country.c).attr('d', path);
-      const dots = root.append('g').selectAll('circle').data(smallFeatures).join('circle')
-        .attr('class', f => 'dot' + (isVisited(f.country.c) ? ' visited' : ''))
-        .attr('data-c', f => f.country.c)
-        .attr('cx', f => proj(f.center)[0]).attr('cy', f => proj(f.center)[1]).attr('r', 2.4);
-      const b = path.bounds({ type: 'Sphere' });
-      const mapH = b[1][1] - b[0][1];
-      const k0 = Math.max(1, Math.min(3, (H * 0.55) / mapH));
-      zoomer = d3.zoom().scaleExtent([1, 60])
-        .translateExtent([[b[0][0], b[0][1] - H * 0.4], [b[1][0], b[1][1] + H * 0.4]])
-        .on('zoom', e => {
-          root.attr('transform', e.transform);
-          dots.attr('r', 2.6 / Math.sqrt(e.transform.k));
-        });
-      svg.call(zoomer).on('dblclick.zoom', null);
-      const [ex, ey] = proj([10, 30]);
-      m.home = d3.zoomIdentity.translate(W / 2 - ex * k0, H / 2 + 20 - ey * k0).scale(k0);
-      svg.call(zoomer.transform, m.home);
+      P = { sphere: new Path2D(path({ type: 'Sphere' })), land: new Path2D(path(HI.land)), borders: new Path2D(path(HI.borders)), byC: new Map(), pts: new Map() };
+      GEO.forEach((g, code) => {
+        if (g.feats.length) P.byC.set(code, new Path2D(g.feats.map(f => path(f)).join('')));
+        P.pts.set(code, proj(g.center));
+      });
+      if (interactive) {
+        const b = path.bounds({ type: 'Sphere' });
+        const mapH = b[1][1] - b[0][1];
+        const k0 = Math.max(1, Math.min(3, (H * 0.5) / mapH));
+        zoomer = d3.zoom().scaleExtent([1, 40])
+          .translateExtent([[b[0][0], b[0][1] - H * 0.45], [b[1][0], b[1][1] + H * 0.45]])
+          .on('zoom', e => { t = e.transform; m.redraw(); });
+        d3.select(canvas).call(zoomer).on('dblclick.zoom', null);
+        const [ex, ey] = proj([10, 30]);
+        home = d3.zoomIdentity.translate(W / 2 - ex * k0, H / 2 - ey * k0).scale(k0);
+        d3.select(canvas).call(zoomer.transform, home);
+      }
       m.ready = true;
-      m.select(globe.selected);
+      m.redraw();
     };
-    svg.on('click', e => {
-      const el = e.target.closest('[data-c]');
-      if (el) { if (navigator.vibrate) navigator.vibrate(8); openSheet(el.dataset.c); }
-    });
-    m.select = code => {
+    function draw() {
       if (!m.ready) return;
-      svg.selectAll('.sel').classed('sel', false);
-      if (code) svg.selectAll(`[data-c="${code}"]`).classed('sel', true).raise();
-    };
-    m.reset = () => m.ready && svg.transition().duration(600).call(zoomer.transform, m.home);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = interactive ? colors.bg : colors.ocean;
+      ctx.fillRect(0, 0, W, H);
+      ctx.setTransform(dpr * t.k, 0, 0, dpr * t.k, dpr * t.x, dpr * t.y);
+      if (interactive) { ctx.fillStyle = colors.ocean; ctx.fill(P.sphere); }
+      ctx.fillStyle = colors.land; ctx.fill(P.land);
+      ctx.fillStyle = colors.accent;
+      visitedList().forEach(code => { const p = P.byC.get(code); if (p) ctx.fill(p); });
+      ctx.lineWidth = (interactive ? 0.6 : 0.4) / t.k; ctx.strokeStyle = colors.border; ctx.stroke(P.borders);
+      const rv = (interactive ? 3 : 1.8) / Math.sqrt(t.k);
+      SMALL.forEach(code => {
+        const v = isVisited(code);
+        if (!v && !interactive) return;
+        const [x, y] = P.pts.get(code);
+        ctx.beginPath(); ctx.arc(x, y, v ? rv : rv * 0.65, 0, Math.PI * 2);
+        ctx.fillStyle = v ? colors.accent : colors.land; ctx.fill();
+      });
+      if (m.selected) {
+        ctx.lineWidth = 2 / t.k; ctx.strokeStyle = colors.brand;
+        const p = P.byC.get(m.selected);
+        if (p && !GEO.get(m.selected).small) ctx.stroke(p);
+        else { const [x, y] = P.pts.get(m.selected); ctx.beginPath(); ctx.arc(x, y, 8 / t.k, 0, Math.PI * 2); ctx.stroke(); }
+      }
+    }
+    m.redraw = () => { if (m.ready && !raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
+    m.select = code => { m.selected = code; m.redraw(); };
+    m.reset = () => zoomer && d3.select(canvas).transition().duration(600).call(zoomer.transform, home);
+    m.invalidate = () => { m.ready = false; key = ''; };
+    if (interactive) {
+      canvas.addEventListener('click', e => {
+        if (!m.ready) return;
+        const r = canvas.getBoundingClientRect();
+        const [px, py] = t.invert([e.clientX - r.left, e.clientY - r.top]);
+        let best = null, bd = 14 / t.k;
+        SMALL.forEach(code => {
+          const [x, y] = P.pts.get(code);
+          const d = Math.hypot(x - px, y - py);
+          if (d < bd) { bd = d; best = code; }
+        });
+        if (!best) { const ll = proj.invert([px, py]); best = ll && hitCountry(ll); }
+        if (best) { if (navigator.vibrate) navigator.vibrate(8); openSheet(best); }
+      });
+    }
     return m;
-  })();
-  $('#map-reset').onclick = () => map.reset();
+  }
+  const plan = FlatMap($('#plan'), true);
+  const mini = FlatMap($('#mini'), false);
+
+  /* ---------- Passeport ---------- */
+  $('#unit').addEventListener('click', e => {
+    const b = e.target.closest('[data-unit]');
+    if (!b) return;
+    state.unit = b.dataset.unit; save(); renderPassport();
+  });
+  function renderPassport() {
+    const list = visitedList(), n = list.length, pct = Math.round(n / TOTAL * 100);
+    $('#big-num').innerHTML = state.unit === 'pct' ? `${pct}<small>%</small>` : `${n}<small>/ ${TOTAL}</small>`;
+    $('#big-bar').style.width = Math.max(pct, n ? 2 : 0) + '%';
+    $$('#unit button').forEach(b => b.classList.toggle('active', b.dataset.unit === state.unit));
+    const per = {}, tot = {};
+    COUNTRIES.forEach(c => { tot[c.k] = (tot[c.k] || 0) + 1; if (isVisited(c.c)) per[c.k] = (per[c.k] || 0) + 1; });
+    $('#st-cont').textContent = Object.keys(per).length;
+    $('#by-continent').innerHTML = Object.keys(CONT).map(k => {
+      const v = per[k] || 0, p = Math.round(v / tot[k] * 100);
+      return `<div class="cont-row"><div>${CONT[k]}<span>${state.unit === 'pct' ? p + ' %' : `${v} / ${tot[k]}`}</span></div><div class="bar"><i style="width:${p}%"></i></div></div>`;
+    }).join('');
+    const recent = list.sort((a, b) => state.visited[b] - state.visited[a]).slice(0, 6);
+    $('#recent').innerHTML = recent.length
+      ? recent.map(c => `<button data-open="${c}"><img src="${flagSrc(c)}" alt=""><span>${byCode.get(c).name}</span><i class="dot"></i></button>`).join('')
+      : '<div class="empty">Aucun pays pour l\'instant. Touchez un pays sur la carte pour commencer.</div>';
+    const photos = Object.values(photoCounts).reduce((s, v) => s + v, 0);
+    const albums = Object.values(photoCounts).filter(v => v > 0).length;
+    $('#st-photos').textContent = photos;
+    $('#st-albums').textContent = `${albums} album${albums > 1 ? 's' : ''}`;
+    mini.redraw();
+  }
+  $('#recent').addEventListener('click', e => { const b = e.target.closest('[data-open]'); b && openSheet(b.dataset.open); });
 
   /* ---------- Drapeaux ---------- */
   const filters = { flags: 'all', list: 'all' };
@@ -472,8 +571,7 @@
     $$('#flag-grid .flag').forEach(el => { el.hidden = !passes(el.dataset.c, filters.flags); });
   }
 
-  /* ---------- Liste ---------- */
-  const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  /* ---------- Recherche ---------- */
   let listBuilt = false;
   function buildList() {
     if (listBuilt) return;
@@ -486,7 +584,7 @@
       const t = e.target.closest('[data-toggle]');
       if (t) { if (navigator.vibrate) navigator.vibrate(8); return setVisited(t.dataset.toggle, !isVisited(t.dataset.toggle)); }
       const o = e.target.closest('[data-open]');
-      if (o) openSheet(o.dataset.open);
+      if (o) { closeFinder(); show('map'); setTimeout(() => openSheet(o.dataset.open), 120); }
     });
     renderPhotoCounts();
     applyListFilter();
@@ -508,7 +606,22 @@
       const n = photoCounts[el.dataset.ph] || 0;
       el.textContent = n ? `${n} photo${n > 1 ? 's' : ''}` : '';
     });
+    renderPassport();
   }
+  const finderOpen = () => $('#finder').classList.contains('show');
+  function openFinder() {
+    buildList();
+    $('#finder').classList.add('show');
+    $('#finder').setAttribute('aria-hidden', 'false');
+    setTimeout(() => $('#search').focus(), 250);
+  }
+  function closeFinder() {
+    $('#finder').classList.remove('show');
+    $('#finder').setAttribute('aria-hidden', 'true');
+    $('#search').blur();
+  }
+  $('#open-finder').onclick = openFinder;
+  $('#finder-close').onclick = closeFinder;
 
   /* ---------- Fiche pays + album ---------- */
   const sheet = { code: null, open: false, photos: [], urls: [] };
@@ -561,7 +674,7 @@
     sheetEl.classList.add('show');
     $('#scrim').classList.add('show');
     globe.focus(code, true);
-    map.select(code);
+    plan.select(code);
     loadAlbum();
   }
   function closeSheet() {
@@ -571,7 +684,7 @@
     sheetEl.style.transform = '';
     $('#scrim').classList.remove('show');
     globe.selected = null; globe.dirty = true;
-    map.select(null);
+    plan.select(null);
     setTimeout(() => { if (!sheet.open) { revokeUrls(); $('#album').innerHTML = ''; } }, 400);
   }
   $('#scrim').onclick = closeSheet;
@@ -847,8 +960,9 @@
       if ($('#confirm').classList.contains('show')) return closeConfirm(false);
       if ($('#onboard').classList.contains('show')) { if (!onboardFirst) closeOnboard(); return; }
       if (viewer.open) return closeViewer();
+      if (finderOpen()) return closeFinder();
       if (sheet.open) return closeSheet();
-      if (current !== 'globe') return show('globe');
+      if (current !== 'map') return show('map');
       Plugins.App.exitApp();
     });
   } catch {}
@@ -932,15 +1046,17 @@
   $('#home-row').onclick = () => openOnboard(false);
 
   /* ---------- Démarrage ---------- */
+  state.mode = 'globe';
   applyTheme();
   renderSettings();
   renderCounters();
-  globe.resize();
-  globe.start();
+  syncMode();
   if (state.home && byCode.has(state.home)) playIntro(); else openOnboard(true);
   window.addEventListener('resize', () => {
     globe.resize();
-    if (current === 'map') map.init(); else map.ready && (map.ready = false);
+    plan.invalidate(); mini.invalidate();
+    if (current === 'map' && state.mode === 'plan') plan.init();
+    if (current === 'passport') mini.init();
     if (viewer.open) goTo(viewer.i, false);
   });
   PhotoDB.counts().then(c => { photoCounts = c; renderPhotoCounts(); }).catch(() => {});
