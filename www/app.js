@@ -385,7 +385,8 @@
         const d = Math.hypot(px - x, py - y);
         if (d < bd) { bd = d; best = code; }
       });
-      if (!best) best = hitCountry(proj.invert([x, y]));
+      const hit = hitCountry(proj.invert([x, y]));
+      if (hit && !(best && bd < 9)) best = hit;
       if (best) {
         if (navigator.vibrate) navigator.vibrate(8);
         openSheet(best);
@@ -494,7 +495,9 @@
           const d = Math.hypot(x - px, y - py);
           if (d < bd) { bd = d; best = code; }
         });
-        if (!best) { const ll = proj.invert([px, py]); best = ll && hitCountry(ll); }
+        const ll = proj.invert([px, py]);
+        const hit = ll && hitCountry(ll);
+        if (hit && !(best && bd < 7 / t.k)) best = hit;
         if (best) { if (navigator.vibrate) navigator.vibrate(8); openSheet(best); }
       });
     }
@@ -760,6 +763,7 @@
     sheet.code = code;
     sheet.photos = [];
     sheet.open = true;
+    sheet.openedAt = performance.now();
     $('#hl-shape').innerHTML = shapeSVG(code);
     renderSheetHead();
     sheetEl.style.transform = '';
@@ -779,7 +783,7 @@
     plan.select(null);
     setTimeout(() => { if (!sheet.open) sheet.photos = []; }, 400);
   }
-  $('#scrim').onclick = closeSheet;
+  $('#scrim').onclick = () => { if (performance.now() - (sheet.openedAt || 0) > 450) closeSheet(); };
   $('#sheet-close').onclick = closeSheet;
   $('#visit-btn').onclick = () => {
     if (navigator.vibrate) navigator.vibrate(12);
