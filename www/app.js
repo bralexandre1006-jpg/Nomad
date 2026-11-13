@@ -13,7 +13,7 @@
   const Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
 
   const state = (() => {
-    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true };
+    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null };
     try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return d; }
   })();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
@@ -23,7 +23,12 @@
 
   /* ---------- Géographie ---------- */
   const topo = window.NOMAD_WORLD;
-  const features = topojson.feature(topo, topo.objects.countries).features;
+  const ALIASES = { PS: 'israel' };
+  const searchKey = c => (c.name + ' ' + (ALIASES[c.c] || '')).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const geoms = topo.objects.countries.geometries;
+  const merged = ['376', '275'];
+  const features = topojson.feature(topo, { type: 'GeometryCollection', geometries: geoms.filter(g => !merged.includes(g.id)) }).features;
+  features.push({ type: 'Feature', id: '275', properties: {}, geometry: topojson.merge(topo, geoms.filter(g => merged.includes(g.id))) });
   features.forEach(f => { f.country = byNum.get(f.id) || null; });
   if (!features.some(f => f.id === '798')) {
     features.push({ type: 'Feature', id: '798', country: byNum.get('798'), geometry: { type: 'Point', coordinates: [179.2, -8.52] } });
@@ -213,6 +218,21 @@
         }
       }
 
+      if (g.glow > 0 && g.glowCode) {
+        const f = featByCode.get(g.glowCode);
+        if (f && d3.geoDistance(f.center, c) < Math.PI / 2) {
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, g.glow * 1.3);
+          ctx.shadowColor = 'rgba(255, 214, 64, .95)';
+          ctx.shadowBlur = 12 + 60 * g.glow;
+          ctx.fillStyle = d3.interpolateRgb('#FFC93C', '#FFF6C8')(g.glow);
+          ctx.beginPath();
+          if (f.small) { const [x, y] = proj(f.center); ctx.arc(x, y, 5 + 12 * g.glow, 0, Math.PI * 2); } else path(f);
+          ctx.fill(); ctx.fill();
+          ctx.restore();
+        }
+      }
+
       ctx.beginPath(); path({ type: 'Sphere' });
       ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.stroke();
     }
@@ -224,11 +244,11 @@
       prev = t;
       if (anim) {
         const k = Math.min(1, (t - anim.t0) / anim.dur);
-        const e = d3.easeCubicInOut(k);
+        const e = (anim.ease || d3.easeCubicInOut)(k);
         const r = anim.interp(e);
         rot[0] = r[0]; rot[1] = r[1];
         zoom = anim.z0 + (anim.z1 - anim.z0) * e;
-        if (k >= 1) anim = null;
+        if (k >= 1) { const done = anim.done; anim = null; done && done(); }
         g.dirty = true;
       } else if (!pointers.size) {
         if (Math.abs(vel[0]) > 0.01 || Math.abs(vel[1]) > 0.01) {
@@ -340,6 +360,27 @@
       target[0] = from[0] + ((((target[0] - from[0]) % 360) + 540) % 360 - 180);
       anim = { t0: performance.now(), dur: 900, interp: d3.interpolate(from, target), z0: zoom, z1: zoomIn ? Math.max(zoom, f.small ? 3 : 1.6) : zoom };
     };
+    g.intro = code => new Promise(resolve => {
+      const f = featByCode.get(code);
+      if (!f) return resolve();
+      const target = [-f.center[0], clampLat(-f.center[1])];
+      rot[0] = target[0] - 600; rot[1] = clampLat(target[1] + 35);
+      zoom = 0.08; vel = [0, 0]; g.glow = 0; g.glowCode = code; g.dirty = true;
+      g.intro.skip = () => { if (anim) anim.t0 = -1e9; };
+      anim = {
+        t0: performance.now(), dur: 3000, ease: d3.easeCubicOut,
+        interp: d3.interpolate([rot[0], rot[1]], target), z0: zoom, z1: f.small ? 3.4 : 1.7,
+        done: resolve
+      };
+    });
+    g.setGlow = v => { g.glow = v; g.dirty = true; };
+    g.screenPoint = code => {
+      const f = featByCode.get(code);
+      if (!f) return [W / 2, cy()];
+      proj.translate([W / 2, cy()]).scale(radius()).rotate(rot);
+      return proj(f.center);
+    };
+    g.hold = ms => { lastInteract = performance.now() + ms; };
     g.reset = () => {
       anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], -20]), z0: zoom, z1: 1 };
     };
@@ -439,7 +480,7 @@
     listBuilt = true;
     const ul = $('#country-list');
     ul.innerHTML = COUNTRIES.map(c =>
-      `<li data-row="${c.c}" data-q="${norm(c.name)}"><button class="open" data-open="${c.c}"><img src="${flagSrc(c.c)}" alt="" loading="lazy"><div><div class="nm">${c.name}</div><div class="ph" data-ph="${c.c}"></div></div></button><button class="check${isVisited(c.c) ? ' on' : ''}" data-toggle="${c.c}" aria-label="Visité">${CHECK}</button></li>`).join('')
+      `<li data-row="${c.c}" data-q="${searchKey(c)}"><button class="open" data-open="${c.c}"><img src="${flagSrc(c.c)}" alt="" loading="lazy"><div><div class="nm">${c.name}</div><div class="ph" data-ph="${c.c}"></div></div></button><button class="check${isVisited(c.c) ? ' on' : ''}" data-toggle="${c.c}" aria-label="Visité">${CHECK}</button></li>`).join('')
       + '<li class="empty" hidden>Aucun pays trouvé</li>';
     ul.addEventListener('click', e => {
       const t = e.target.closest('[data-toggle]');
@@ -681,6 +722,8 @@
     $('#custom-color').value = state.color;
     $$('#theme button').forEach(b => b.classList.toggle('active', b.dataset.theme === state.theme));
     $('#autorotate').checked = state.autoRotate;
+    const h = byCode.get(state.home);
+    $('#home-value').textContent = h ? h.name : 'Choisir';
   }
   const setColor = c => { state.color = c; save(); applyTheme(); renderSettings(); };
   $('#swatches').addEventListener('click', e => { const b = e.target.closest('[data-color]'); b && setColor(b.dataset.color); });
@@ -802,6 +845,7 @@
   try {
     Plugins.App && Plugins.App.addListener('backButton', () => {
       if ($('#confirm').classList.contains('show')) return closeConfirm(false);
+      if ($('#onboard').classList.contains('show')) { if (!onboardFirst) closeOnboard(); return; }
       if (viewer.open) return closeViewer();
       if (sheet.open) return closeSheet();
       if (current !== 'globe') return show('globe');
@@ -809,12 +853,91 @@
     });
   } catch {}
 
+  /* ---------- Pays d'origine + animation de lancement ---------- */
+  const tween = (dur, fn, ease = d3.easeCubicInOut) => new Promise(res => {
+    const t0 = performance.now();
+    const step = t => {
+      const k = Math.max(0, Math.min(1, (performance.now() - t0) / dur));
+      fn(ease(k));
+      k < 1 ? requestAnimationFrame(step) : res();
+    };
+    requestAnimationFrame(step);
+  });
+  let introSkipped = false;
+  async function playIntro() {
+    const code = state.home;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { globe.focus(code, true); return; }
+    introSkipped = false;
+    document.body.classList.add('intro');
+    await globe.intro(code);
+    const flash = $('#flash'), burst = $('#flash-burst');
+    if (!introSkipped) await tween(700, k => globe.setGlow(k));
+    else globe.setGlow(1);
+    const [x, y] = globe.screenPoint(code);
+    burst.style.left = x + 'px'; burst.style.top = y + 'px';
+    if (navigator.vibrate) navigator.vibrate(30);
+    const fast = introSkipped ? 0.5 : 1;
+    await Promise.all([
+      burst.animate([{ transform: 'translate(-50%,-50%) scale(0)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }],
+        { duration: 520 * fast, easing: 'cubic-bezier(.3,0,.2,1)', fill: 'forwards' }).finished,
+      flash.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: 1 }],
+        { duration: 560 * fast, easing: 'ease-in', fill: 'forwards' }).finished
+    ]);
+    globe.setGlow(0);
+    globe.glowCode = null;
+    globe.hold(4000);
+    document.body.classList.remove('intro');
+    await Promise.all([
+      flash.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900 * fast, easing: 'ease-out', fill: 'forwards' }).finished,
+      burst.animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(1)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.2)' }],
+        { duration: 900 * fast, easing: 'ease-out', fill: 'forwards' }).finished
+    ]);
+  }
+  $('#intro-skip').addEventListener('click', () => { introSkipped = true; globe.intro.skip && globe.intro.skip(); });
+
+  let onboardFirst = false;
+  function openOnboard(first) {
+    onboardFirst = first;
+    $('#onboard-title').textContent = first ? 'Bienvenue sur Nomad' : "Pays d'origine";
+    $('#onboard-close').hidden = first;
+    const ul = $('#onboard-list');
+    if (!ul.children.length) {
+      ul.innerHTML = COUNTRIES.map(c =>
+        `<li data-q="${searchKey(c)}"><button data-home="${c.c}"><img src="${flagSrc(c.c)}" alt="" loading="lazy"><span>${c.name}</span></button></li>`).join('');
+    }
+    $$('[data-home]', ul).forEach(b => b.classList.toggle('on', b.dataset.home === state.home));
+    $('#onboard-search').value = '';
+    $$('li', ul).forEach(li => { li.hidden = false; });
+    $('#onboard').classList.add('show');
+  }
+  const closeOnboard = () => $('#onboard').classList.remove('show');
+  $('#onboard-close').onclick = closeOnboard;
+  $('#onboard-search').addEventListener('input', e => {
+    const q = norm(e.target.value.trim());
+    $$('#onboard-list li').forEach(li => { li.hidden = !!q && !li.dataset.q.includes(q); });
+  });
+  $('#onboard-list').addEventListener('click', e => {
+    const b = e.target.closest('[data-home]');
+    if (!b) return;
+    const code = b.dataset.home;
+    state.home = code;
+    if (!isVisited(code)) state.visited[code] = Date.now();
+    save();
+    renderCounters();
+    updateVisitedUI(code);
+    renderSettings();
+    closeOnboard();
+    if (onboardFirst) setTimeout(playIntro, 350);
+  });
+  $('#home-row').onclick = () => openOnboard(false);
+
   /* ---------- Démarrage ---------- */
   applyTheme();
   renderSettings();
   renderCounters();
   globe.resize();
   globe.start();
+  if (state.home && byCode.has(state.home)) playIntro(); else openOnboard(true);
   window.addEventListener('resize', () => {
     globe.resize();
     if (current === 'map') map.init(); else map.ready && (map.ready = false);

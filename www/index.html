@@ -64,6 +64,11 @@
           <div><strong>Nomad</strong><span data-counter-text></span></div>
         </div>
 
+        <h2>Mon pays</h2>
+        <div class="card">
+          <button class="row" id="home-row"><span>Pays d'origine</span><span class="hint" id="home-value"></span></button>
+        </div>
+
         <h2>Couleur des pays visités</h2>
         <div class="card">
           <div id="swatches" class="swatches"></div>
@@ -134,6 +139,24 @@
     </div>
     <div id="viewer-track"></div>
   </div>
+
+  <div id="intro-skip"></div>
+  <div id="flash"></div>
+  <div id="flash-burst"></div>
+
+  <section id="onboard" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
+    <div class="onboard-head">
+      <img src="img/logo.png" alt="">
+      <button class="icon-btn" id="onboard-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <h2 id="onboard-title"></h2>
+    <p>D'où viens-tu ? Ton globe s'arrêtera sur ce pays à chaque lancement.</p>
+    <div class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="onboard-search" type="search" placeholder="Rechercher un pays" autocomplete="off">
+    </div>
+    <ul id="onboard-list"></ul>
+  </section>
 
   <div id="toast" role="status"></div>
   <div id="confirm" aria-hidden="true">

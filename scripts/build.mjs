@@ -10,8 +10,8 @@ const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const www = path.join(root, 'www');
 const nm = p => path.join(root, 'node_modules', p);
 
-const SOVEREIGN = `AF AL DZ AD AO AG AR AM AU AT AZ BS BH BD BB BY BE BZ BJ BT BO BA BW BR BN BG BF BI CV KH CM CA CF TD CL CN CO KM CG CD CR CI HR CU CY CZ DK DJ DM DO EC EG SV GQ ER EE SZ ET FJ FI FR GA GM GE DE GH GR GD GT GN GW GY HT HN HU IS IN ID IR IQ IE IL IT JM JP JO KZ KE KI KP KR KW KG LA LV LB LS LR LY LI LT LU MG MW MY MV ML MT MH MR MU MX FM MD MC MN ME MA MZ MM NA NR NP NL NZ NI NE NG MK NO OM PK PW PA PG PY PE PH PL PT QA RO RU RW KN LC VC WS SM ST SA SN RS SC SL SG SK SI SB SO ZA SS ES LK SD SR SE CH SY TJ TZ TH TL TG TO TT TN TR TM TV UG UA AE GB US UY UZ VU VE VN YE ZM ZW VA PS`.split(/\s+/);
-if (new Set(SOVEREIGN).size !== 195) throw new Error('Liste des pays invalide: ' + new Set(SOVEREIGN).size);
+const SOVEREIGN = `AF AL DZ AD AO AG AR AM AU AT AZ BS BH BD BB BY BE BZ BJ BT BO BA BW BR BN BG BF BI CV KH CM CA CF TD CL CN CO KM CG CD CR CI HR CU CY CZ DK DJ DM DO EC EG SV GQ ER EE SZ ET FJ FI FR GA GM GE DE GH GR GD GT GN GW GY HT HN HU IS IN ID IR IQ IE IT JM JP JO KZ KE KI KP KR KW KG LA LV LB LS LR LY LI LT LU MG MW MY MV ML MT MH MR MU MX FM MD MC MN ME MA MZ MM NA NR NP NL NZ NI NE NG MK NO OM PK PW PA PG PY PE PH PL PT QA RO RU RW KN LC VC WS SM ST SA SN RS SC SL SG SK SI SB SO ZA SS ES LK SD SR SE CH SY TJ TZ TH TL TG TO TT TN TR TM TV UG UA AE GB US UY UZ VU VE VN YE ZM ZW VA PS`.split(/\s+/);
+if (new Set(SOVEREIGN).size !== 194) throw new Error('Liste des pays invalide: ' + new Set(SOVEREIGN).size);
 
 const NAME_FIX = { US: 'États-Unis', GB: 'Royaume-Uni', KP: 'Corée du Nord', KR: 'Corée du Sud', CD: 'RD Congo', CG: 'Congo', VA: 'Vatican', PS: 'Palestine', RU: 'Russie', IR: 'Iran', SY: 'Syrie', MD: 'Moldavie', LA: 'Laos', TZ: 'Tanzanie', BO: 'Bolivie', VE: 'Venezuela', FM: 'Micronésie', MK: 'Macédoine du Nord', CZ: 'Tchéquie', VN: 'Viêt Nam', BN: 'Brunei', SZ: 'Eswatini', CV: 'Cap-Vert', TL: 'Timor oriental', CI: "Côte d'Ivoire", MM: 'Myanmar', DO: 'Rép. dominicaine', CF: 'Centrafrique', AE: 'Émirats arabes unis' };
 

@@ -319,6 +319,43 @@ input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 8px; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 4px; }
 .confirm-actions button { padding: 10px 16px; border-radius: 10px; font-weight: 600; }
 
+#tabbar, .hud, .fab { transition: opacity .6s var(--ease), transform .6s var(--ease); }
+body.intro #tabbar { opacity: 0; transform: translateY(100%); pointer-events: none; }
+body.intro .hud { opacity: 0; transform: translateY(-20px); }
+body.intro .fab { opacity: 0; transform: scale(.6); pointer-events: none; }
+#intro-skip { position: fixed; inset: 0; z-index: 60; display: none; }
+body.intro #intro-skip { display: block; }
+#flash {
+  position: fixed; inset: 0; z-index: 61; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 50%, #FFFDF2 0%, #FFF3B8 45%, #FFE27A 100%);
+}
+#flash-burst {
+  position: fixed; z-index: 62; pointer-events: none; opacity: 0;
+  width: 260vmax; height: 260vmax; border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  background: radial-gradient(circle, #FFFFFF 0%, #FFF8D6 12%, rgba(255, 220, 90, .9) 28%, rgba(255, 200, 60, 0) 60%);
+}
+
+#onboard {
+  position: fixed; inset: 0; z-index: 55; background: var(--bg);
+  display: flex; flex-direction: column;
+  padding: calc(var(--safe-top) + 16px) calc(var(--safe-right)) 0 calc(var(--safe-left));
+  opacity: 0; pointer-events: none; transform: translateY(16px);
+  transition: opacity .35s var(--ease), transform .4s var(--ease);
+}
+#onboard.show { opacity: 1; pointer-events: auto; transform: none; }
+.onboard-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 0 20px; }
+.onboard-head img { width: 72px; height: 72px; }
+#onboard h2 { margin: 16px 20px 4px; font-size: 28px; letter-spacing: -.6px; }
+#onboard p { margin: 0 20px 14px; color: var(--muted); }
+#onboard-list { list-style: none; margin: 6px 0 0; padding: 0 12px calc(var(--safe-bottom) + 16px); overflow-y: auto; flex: 1; }
+#onboard-list button {
+  width: 100%; display: flex; align-items: center; gap: 14px; padding: 11px 8px; text-align: left;
+  border-radius: 12px; font-size: 16px; font-weight: 500;
+}
+#onboard-list button:active, #onboard-list button.on { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+#onboard-list img { width: 36px; height: 27px; border-radius: 5px; object-fit: cover; box-shadow: 0 0 0 1px var(--line); }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
