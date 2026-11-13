@@ -92,8 +92,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 }
 .searchbar {
   flex: 1; display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 16px;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
   border: 1px solid var(--line); border-radius: 16px; color: var(--muted); font-size: 15px;
   box-shadow: var(--shadow);
 }
@@ -116,8 +115,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .round-btn, .round-spacer { width: 48px; height: 48px; flex: none; }
 .round-btn {
   border-radius: 50%; display: grid; place-items: center;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
   border: 1px solid var(--line); box-shadow: var(--shadow);
   transition: transform .15s var(--ease);
 }
@@ -126,8 +124,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 
 .seg {
   display: flex; padding: 4px; gap: 2px; border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
   border: 1px solid var(--line);
 }
 .seg button {
@@ -136,7 +133,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 }
 .seg button.active { background: var(--brand); color: var(--brand-ink); }
 .seg.small button { padding: 7px 14px; font-size: 14px; }
-.seg.block { margin: 12px; border-radius: 14px; background: var(--surface-2); backdrop-filter: none; }
+.seg.block { margin: 12px; border-radius: 14px; background: var(--surface-2); }
 .seg.block button { flex: 1; border-radius: 10px; }
 
 /* ---------- Passeport ---------- */
@@ -287,16 +284,16 @@ input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 8px; }
 /* ---------- Barre d'onglets ---------- */
 #tabbar {
   flex: none; display: flex; justify-content: space-around;
-  padding: 8px calc(8px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(8px + var(--safe-left));
+  padding: 10px calc(8px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(8px + var(--safe-left));
   background: var(--bg); border-top: 1px solid var(--line);
   position: relative; z-index: 5;
 }
 .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 500; }
 .tab i {
-  width: 60px; height: 34px; border-radius: 17px; display: grid; place-items: center;
+  width: 64px; height: 40px; border-radius: 20px; display: grid; place-items: center;
   transition: background .25s var(--ease), color .2s, transform .25s var(--ease);
 }
-.tab svg { width: 22px; height: 22px; }
+.tab svg { width: 24px; height: 24px; }
 .tab.active { color: var(--ink); font-weight: 600; }
 .tab.active i { background: var(--brand); color: var(--brand-ink); }
 .tab:active i { transform: scale(.92); }
@@ -490,3 +487,10 @@ body.intro .map-bottom { opacity: 0; transform: translateY(24px); pointer-events
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* ---------- Performance ---------- */
+.flag { content-visibility: auto; contain-intrinsic-size: 98px 120px; }
+.country-list li { content-visibility: auto; contain-intrinsic-size: 300px 56px; }
+#sheet, #finder, #viewer, .view { will-change: transform, opacity; }
+#globe, #plan { will-change: contents; }
+button, a, input { touch-action: manipulation; }

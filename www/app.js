@@ -200,7 +200,7 @@
     const ctx = canvas.getContext('2d');
     const proj = d3.geoOrthographic().clipAngle(90);
     const path = d3.geoPath(proj, ctx);
-    const grat = d3.geoGraticule10();
+    const grat = d3.geoGraticule().step([20, 20])();
     const g = { dirty: true, active: true, running: false, selected: null };
     let W = 0, H = 0, dpr = 1, base = 1, zoom = 1;
     const rot = [-8, -38, 0];
