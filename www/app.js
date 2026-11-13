@@ -13,7 +13,7 @@
   const Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
 
   const state = (() => {
-    const d = { visited: {}, color: PRESETS[0], theme: 'auto', autoRotate: true };
+    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true };
     try { return { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return d; }
   })();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
