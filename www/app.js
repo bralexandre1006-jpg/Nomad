@@ -182,7 +182,7 @@
     const proj = d3.geoOrthographic().clipAngle(90);
     const path = d3.geoPath(proj, ctx);
     const grat = d3.geoGraticule10();
-    const g = { dirty: true, active: true, running: false, selected: null, glow: 0, glowCode: null };
+    const g = { dirty: true, active: true, running: false, selected: null };
     let W = 0, H = 0, dpr = 1, base = 1, zoom = 1;
     const rot = [-8, -38, 0];
     let vel = [0, 0], lastInteract = 0, anim = null, hiPending = false;
@@ -246,21 +246,6 @@
             ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.stroke();
           }
         } else { ctx.beginPath(); (G.byC.get(g.selected) || geo.feats).forEach(f => path(f)); ctx.stroke(); }
-      }
-
-      if (g.glow > 0 && g.glowCode) {
-        const geo = GEO.get(g.glowCode);
-        if (geo && d3.geoDistance(geo.center, c) < Math.PI / 2) {
-          ctx.save();
-          ctx.globalAlpha = Math.min(1, g.glow * 1.3);
-          ctx.shadowColor = 'rgba(255, 214, 64, .95)';
-          ctx.shadowBlur = 12 + 60 * g.glow;
-          ctx.fillStyle = d3.interpolateRgb('#FFC93C', '#FFF6C8')(g.glow);
-          ctx.beginPath();
-          if (geo.small) { const [x, y] = proj(geo.center); ctx.arc(x, y, 5 + 12 * g.glow, 0, Math.PI * 2); } else geo.feats.forEach(f => path(f));
-          ctx.fill(); ctx.fill();
-          ctx.restore();
-        }
       }
 
       const shade = ctx.createRadialGradient(X - R * 0.3, Y - R * 0.35, R * 0.15, X, Y, R);
@@ -398,25 +383,11 @@
       target[0] = from[0] + ((((target[0] - from[0]) % 360) + 540) % 360 - 180);
       anim = { t0: performance.now(), dur: 900, interp: d3.interpolate(from, target), z0: zoom, z1: zoomIn ? Math.max(zoom, geo.small ? 3 : 1.6) : zoom };
     };
-    g.intro = code => new Promise(resolve => {
+    g.lookAt = (code, z) => {
       const geo = GEO.get(code);
-      if (!geo) return resolve();
-      const target = [-geo.center[0], clampLat(-geo.center[1])];
-      rot[0] = target[0] - 600; rot[1] = clampLat(target[1] + 35);
-      zoom = 0.08; vel = [0, 0]; g.glow = 0; g.glowCode = code; g.dirty = true;
-      g.intro.skip = () => { if (anim) anim.t0 = -1e9; };
-      anim = {
-        t0: performance.now(), dur: 3000, ease: d3.easeCubicOut,
-        interp: d3.interpolate([rot[0], rot[1]], target), z0: zoom, z1: geo.small ? 3.4 : 1.4,
-        done: resolve
-      };
-    });
-    g.setGlow = v => { g.glow = v; g.dirty = true; };
-    g.screenPoint = code => {
-      const geo = GEO.get(code);
-      if (!geo) return [W / 2, cy()];
-      proj.translate([W / 2, cy()]).scale(radius()).rotate(rot);
-      return proj(geo.center);
+      if (!geo) return;
+      rot[0] = -geo.center[0]; rot[1] = clampLat(-geo.center[1]);
+      zoom = z; anim = null; vel = [0, 0]; g.dirty = true;
     };
     g.hold = ms => { lastInteract = performance.now() + ms; };
     g.reset = () => {
@@ -968,46 +939,91 @@
   } catch {}
 
   /* ---------- Pays d'origine + animation de lancement ---------- */
-  const tween = (dur, fn, ease = d3.easeCubicInOut) => new Promise(res => {
-    const t0 = performance.now();
-    const step = t => {
-      const k = Math.max(0, Math.min(1, (performance.now() - t0) / dur));
-      fn(ease(k));
-      k < 1 ? requestAnimationFrame(step) : res();
+  /* ---------- Animation de lancement ---------- */
+  const intro = (() => {
+    const el = $('#intro'), canvas = $('#intro-globe'), ctx = canvas.getContext('2d');
+    const proj = d3.geoOrthographic().clipAngle(90);
+    const path = d3.geoPath(proj, ctx);
+    const C = { ocean: '#1E2638', ocean2: '#2B3554', land: '#EFE7D6', line: '#1E2638' };
+    const stars = d3.range(26).map(() => [Math.random(), Math.random(), 0.6 + Math.random() * 1.2, Math.random()]);
+    let W, H, dpr, skip = false;
+    const size = () => {
+      const r = el.getBoundingClientRect();
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = r.width; H = r.height;
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     };
-    requestAnimationFrame(step);
-  });
-  let introSkipped = false;
-  async function playIntro() {
-    const code = state.home;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { globe.focus(code, true); return; }
-    introSkipped = false;
-    document.body.classList.add('intro');
-    await globe.intro(code);
-    const flash = $('#flash'), burst = $('#flash-burst');
-    if (!introSkipped) await tween(700, k => globe.setGlow(k));
-    else globe.setGlow(1);
-    const [x, y] = globe.screenPoint(code);
-    burst.style.left = x + 'px'; burst.style.top = y + 'px';
-    if (navigator.vibrate) navigator.vibrate(30);
-    const fast = introSkipped ? 0.5 : 1;
-    await Promise.all([
-      burst.animate([{ transform: 'translate(-50%,-50%) scale(0)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }],
-        { duration: 520 * fast, easing: 'cubic-bezier(.3,0,.2,1)', fill: 'forwards' }).finished,
-      flash.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: 1 }],
-        { duration: 560 * fast, easing: 'ease-in', fill: 'forwards' }).finished
-    ]);
-    globe.setGlow(0);
-    globe.glowCode = null;
-    globe.hold(4000);
-    document.body.classList.remove('intro');
-    await Promise.all([
-      flash.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900 * fast, easing: 'ease-out', fill: 'forwards' }).finished,
-      burst.animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(1)' }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1.2)' }],
-        { duration: 900 * fast, easing: 'ease-out', fill: 'forwards' }).finished
-    ]);
-  }
-  $('#intro-skip').addEventListener('click', () => { introSkipped = true; globe.intro.skip && globe.intro.skip(); });
+    function draw(rot, R, alpha, hl, fast) {
+      const X = W / 2, Y = H / 2 - 30;
+      const G = fast ? LO : HI;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalAlpha = alpha;
+      stars.forEach(([sx, sy, sr, ph]) => {
+        const x = X + (sx - 0.5) * R * 3.2, y = Y + (sy - 0.5) * R * 3.2;
+        if (Math.hypot(x - X, y - Y) < R * 1.12) return;
+        ctx.globalAlpha = alpha * (0.35 + 0.45 * Math.abs(Math.sin(ph * 6 + rot[0] / 40)));
+        ctx.beginPath(); ctx.arc(x, y, sr, 0, Math.PI * 2); ctx.fillStyle = C.land; ctx.fill();
+      });
+      ctx.globalAlpha = alpha;
+      proj.translate([X, Y]).scale(R).rotate(rot).precision(fast ? 1.6 : 0.5);
+      const sea = ctx.createRadialGradient(X - R * 0.35, Y - R * 0.4, R * 0.1, X, Y, R);
+      sea.addColorStop(0, C.ocean2); sea.addColorStop(1, C.ocean);
+      ctx.beginPath(); ctx.arc(X, Y, R, 0, Math.PI * 2); ctx.fillStyle = sea; ctx.fill();
+      ctx.beginPath(); path(G.land); ctx.fillStyle = C.land; ctx.fill();
+      if (hl > 0) {
+        ctx.beginPath(); (G.byC.get(state.home) || GEO.get(state.home).feats).forEach(f => path(f));
+        ctx.fillStyle = d3.interpolateRgb(C.land, colors.accent)(hl); ctx.fill();
+        if (GEO.get(state.home).small) {
+          const p = proj(GEO.get(state.home).center);
+          if (p) { ctx.beginPath(); ctx.arc(p[0], p[1], 2 + 3 * hl, 0, Math.PI * 2); ctx.fillStyle = colors.accent; ctx.fill(); }
+        }
+      }
+      ctx.beginPath(); path(G.borders); ctx.strokeStyle = C.line; ctx.lineWidth = 0.5; ctx.stroke();
+      ctx.beginPath(); ctx.arc(X, Y, R, 0, Math.PI * 2); ctx.lineWidth = 3; ctx.strokeStyle = C.ocean; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const run = (dur, fn, ease) => new Promise(res => {
+      const t0 = performance.now();
+      const step = () => {
+        const k = skip ? 1 : Math.min(1, (performance.now() - t0) / dur);
+        fn(ease ? ease(k) : k, k);
+        k < 1 ? requestAnimationFrame(step) : res();
+      };
+      requestAnimationFrame(step);
+    });
+    async function play() {
+      const code = state.home, geo = GEO.get(code);
+      skip = false;
+      el.classList.add('show');
+      document.body.classList.add('intro');
+      size();
+      globe.lookAt(code, geo.small ? 3 : 1.4);
+      const R = Math.min(W, H) * 0.24;
+      const target = [-geo.center[0], Math.max(-70, Math.min(70, -geo.center[1]))];
+      const from = [target[0] - 720, target[1] + 25];
+      const spin = d3.interpolate(from, target);
+      $('#intro-name').animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }],
+        { duration: 900, delay: 500, easing: 'ease-out', fill: 'both' });
+      await run(3200, (e, k) => {
+        const appear = d3.easeBackOut.overshoot(1.3)(Math.min(1, k / 0.22));
+        draw(spin(e), R * Math.max(0.01, appear), Math.min(1, k / 0.15), 0, true);
+      }, d3.easeCubicOut);
+      await run(650, e => draw(target, R, 1, e, false), d3.easeCubicInOut);
+      if (!skip) await wait(700);
+      const veil = $('#veil');
+      await veil.animate([{ opacity: 0 }, { opacity: 1 }], { duration: skip ? 250 : 750, easing: 'ease-in', fill: 'forwards' }).finished;
+      el.classList.remove('show');
+      document.body.classList.remove('intro');
+      globe.hold(3500);
+      await wait(150);
+      await veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 750, easing: 'ease-out', fill: 'forwards' }).finished;
+    }
+    el.addEventListener('click', () => { skip = true; });
+    return { play };
+  })();
+  const playIntro = () => intro.play();
 
   let onboardFirst = false;
   function openOnboard(first) {
