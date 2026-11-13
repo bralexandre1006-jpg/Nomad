@@ -100,6 +100,9 @@
           </label>
         </div>
 
+        <h3 class="section">Couleur des villes</h3>
+        <div class="card"><div id="city-swatches" class="swatches"></div></div>
+
         <h3 class="section">Apparence</h3>
         <div class="card">
           <div class="seg block" id="theme">
@@ -163,6 +166,11 @@
     <button id="visit-btn" class="visit-btn"></button>
     <button class="year-row" id="year-row" hidden><span>Première visite</span><b id="year-value"></b></button>
     <div class="album-head">
+      <h4>Villes</h4>
+      <span id="city-count"></span>
+    </div>
+    <div class="city-chips" id="city-chips"></div>
+    <div class="album-head">
       <h4>Album</h4>
       <span id="album-count"></span>
     </div>
@@ -186,6 +194,24 @@
       </div>
     </div>
     <div class="story-tap" id="story-tap"></div>
+  </div>
+
+  <section id="citypick" aria-label="Ajouter une ville">
+    <div class="finder-top">
+      <div class="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="city-search" type="search" placeholder="Rechercher une ville" autocomplete="off">
+      </div>
+      <button class="link" id="city-close">Fermer</button>
+    </div>
+    <p class="city-sub">Villes · <span id="city-title"></span></p>
+    <div class="scroll"><ul id="city-results" class="city-results"></ul></div>
+  </section>
+
+  <div id="placebar">
+    <svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+    <span>Touche la carte pour placer <b id="place-name"></b></span>
+    <button id="place-cancel">Annuler</button>
   </div>
 
   <div id="years" aria-hidden="true">

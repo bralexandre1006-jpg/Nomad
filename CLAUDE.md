@@ -72,5 +72,5 @@ Lors de la première session, complète un petit encadré Informations du projet
 - Workflow GitHub Actions : `.github/workflows/android.yml` (artifact `Nomad-vX.Y.Z`)
 - Signature : keystore PKCS12 (alias `nomad`) via secrets `NOMAD_KEYSTORE_BASE64`, `NOMAD_KEYSTORE_PASSWORD`, `NOMAD_KEY_ALIAS`, `NOMAD_KEY_PASSWORD` ; config dans `android/app/build.gradle`
 - Version : `versionCode` (+1 à chaque livraison) et `versionName` semver dans `android/app/build.gradle`
-- Données locales : `localStorage` clé `nomad.v1` (pays visités, années de 1re visite `years`, réglages) ; IndexedDB `nomad` / store `photos` (albums)
-- Généré au build (non versionné) : `www/vendor`, `www/flags`, `www/data` via `npm run build`
+- Données locales : `localStorage` clé `nomad.v1` (pays visités, années `years`, villes `cities`, réglages) ; IndexedDB `nomad` / store `photos` (métadonnées) + fichiers photos dans `Directory.DATA/photos/` (Filesystem)
+- Généré au build (non versionné) : `www/vendor`, `www/flags`, `www/data` (dont `data/cities/XX.json`, GeoNames via all-the-cities) via `npm run build`

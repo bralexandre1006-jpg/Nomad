@@ -31,7 +31,7 @@ for (const [k, [, list]] of Object.entries(CONTINENTS)) list.split(' ').forEach(
 
 const rm = d => fs.rmSync(d, { recursive: true, force: true });
 const mk = d => fs.mkdirSync(d, { recursive: true });
-['vendor', 'flags', 'data', 'fonts'].forEach(d => { rm(path.join(www, d)); mk(path.join(www, d)); });
+['vendor', 'flags', 'data', 'data/cities', 'fonts'].forEach(d => { rm(path.join(www, d)); mk(path.join(www, d)); });
 
 fs.copyFileSync(nm('d3/dist/d3.min.js'), path.join(www, 'vendor/d3.min.js'));
 fs.copyFileSync(nm('topojson-client/dist/topojson-client.min.js'), path.join(www, 'vendor/topojson-client.min.js'));
@@ -46,6 +46,7 @@ const list = SOVEREIGN.map(a2 => {
 }).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 
 // Régions d'outre-mer / îles séparées du pays principal : id world-atlas ou boîtes [lonMin, latMin, lonMax, latMax]
+const isle = (x, y, d) => [[x - d, y - d, x + d, y + d]];
 const SUBS = [
   ['FR-GF', 'FR', 'Guyane', { b: [[-55, 1.5, -51, 6.5]], f: 'gf' }],
   ['FR-GP', 'FR', 'Guadeloupe', { b: [[-61.9, 15.8, -60.9, 16.6]], f: 'gp' }],
@@ -59,9 +60,14 @@ const SUBS = [
   ['FR-MF', 'FR', 'Saint-Martin', { id: '663', f: 'mf' }],
   ['FR-BL', 'FR', 'Saint-Barthélemy', { id: '652', f: 'bl' }],
   ['FR-TF', 'FR', 'Terres australes françaises', { id: '260', f: 'tf' }],
-  ['ES-CN', 'ES', 'Îles Canaries', { b: [[-18.5, 27.4, -13.2, 29.6]], f: 'ic' }],
-  ['ES-IB', 'ES', 'Îles Baléares', { b: [[1, 38.5, 4.6, 40.2]] }],
-  ['PT-20', 'PT', 'Açores', { b: [[-31.5, 36.5, -24.5, 40]] }],
+  ...[['TF', 'Tenerife', -16.54, 28.29], ['LZ', 'Lanzarote', -13.64, 29.03], ['FV', 'Fuerteventura', -14.04, 28.41], ['GC', 'Grande Canarie', -15.58, 27.96],
+    ['GO', 'La Gomera', -17.21, 28.11], ['HI', 'El Hierro', -18.01, 27.74], ['LP', 'La Palma', -17.85, 28.70]]
+    .map(([k, n, x, y]) => [`ES-CN-${k}`, 'ES', n, { b: isle(x, y, 0.3), f: 'ic', g: 'Îles Canaries' }]),
+  ...[['MA', 'Majorque', 2.96, 39.63], ['ME', 'Minorque', 4.09, 39.97], ['IB', 'Ibiza', 1.42, 38.99], ['FO', 'Formentera', 1.48, 38.70]]
+    .map(([k, n, x, y]) => [`ES-IB-${k}`, 'ES', n, { b: isle(x, y, 0.12), g: 'Îles Baléares' }]),
+  ...[['SM', 'São Miguel', -25.51, 37.80], ['MA', 'Santa Maria', -25.11, 36.98], ['TE', 'Terceira', -27.21, 38.72], ['SJ', 'São Jorge', -28.04, 38.63],
+    ['PI', 'Pico', -28.35, 38.47], ['FA', 'Faial', -28.71, 38.58], ['FL', 'Flores', -31.21, 39.44]]
+    .map(([k, n, x, y]) => [`PT-20-${k}`, 'PT', n, { b: isle(x, y, 0.12), g: 'Açores' }]),
   ['PT-30', 'PT', 'Madère', { b: [[-17.5, 32.3, -16, 33.3]] }],
   ['US-AK', 'US', 'Alaska', { b: [[-180, 50, -129, 72], [170, 50, 180, 56]] }],
   ['US-HI', 'US', 'Hawaï', { b: [[-161, 18.5, -154, 22.5]] }],
@@ -102,7 +108,7 @@ const SUBS = [
   if (!SOVEREIGN.includes(p)) throw new Error('Parent inconnu: ' + c);
   let f = o.f && fs.existsSync(nm(`flag-icons/flags/4x3/${o.f}.svg`)) ? o.f : null;
   if (f) fs.copyFileSync(nm(`flag-icons/flags/4x3/${f}.svg`), path.join(www, `flags/${f}.svg`));
-  return { c, p, name, id: o.id, b: o.b, f: f || p.toLowerCase() };
+  return { c, p, name, id: o.id, b: o.b, g: o.g, f: f || p.toLowerCase() };
 });
 
 const topo = JSON.parse(fs.readFileSync(nm('world-atlas/countries-50m.json'), 'utf8'));
@@ -116,4 +122,17 @@ fs.writeFileSync(path.join(www, 'data/world.js'), 'window.NOMAD_WORLD=' + JSON.s
 fs.writeFileSync(path.join(www, 'data/continents.js'), 'window.NOMAD_CONTINENTS=' + JSON.stringify(Object.fromEntries(Object.entries(CONTINENTS).map(([k, [n]]) => [k, n]))) + ';');
 fs.copyFileSync(nm('@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2'), path.join(www, 'fonts/outfit.woff2'));
 fs.writeFileSync(path.join(www, 'data/countries.js'), 'window.NOMAD_COUNTRIES=' + JSON.stringify(list) + ';window.NOMAD_SUBS=' + JSON.stringify(SUBS) + ';');
+// Villes (GeoNames, > 1000 habitants), un fichier par code pays
+const byCc = {};
+for (const c of require('all-the-cities')) {
+  (byCc[c.country] ||= []).push(c);
+}
+let nCities = 0;
+for (const [cc, list] of Object.entries(byCc)) {
+  list.sort((a, b) => b.population - a.population);
+  const out = list.map(c => [c.name, +c.loc.coordinates[0].toFixed(3), +c.loc.coordinates[1].toFixed(3)]);
+  nCities += out.length;
+  fs.writeFileSync(path.join(www, `data/cities/${cc}.json`), JSON.stringify(out));
+}
+console.log(`Villes: ${nCities} dans ${Object.keys(byCc).length} fichiers`);
 console.log(`OK: ${list.length} pays, sans géométrie: ${missing.join(' ') || 'aucun'}`);

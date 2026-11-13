@@ -18,8 +18,10 @@
   const Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
 
   const state = (() => {
-    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null, unit: 'n', mode: 'globe', years: {} };
-    try { const s = { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; s.years = s.years || {}; return s; } catch { return d; }
+    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null, unit: 'n', mode: 'globe', years: {}, cities: {}, cityColor: '#FFC93C' };
+    try { const s = { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; s.years = s.years || {}; s.cities = s.cities || {};
+      ['ES-CN', 'ES-IB', 'PT-20'].forEach(k => { delete s.visited[k]; delete s.years[k]; delete s.cities[k]; });
+      return s; } catch { return d; }
   })();
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
   const isVisited = c => !!state.visited[c];
@@ -29,6 +31,7 @@
 
   const ALIASES = { PS: 'israel' };
   const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const esc = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
   const searchKey = c => norm(c.name + ' ' + (ALIASES[c.c] || ''));
 
   /* ---------- Géographie ---------- */
@@ -106,6 +109,8 @@
     root.style.setProperty('--accent-ink', inkFor(state.color));
     const cs = getComputedStyle(root);
     ['ocean', 'ocean-2', 'land', 'border', 'graticule', 'accent', 'brand', 'bg'].forEach(k => { colors[k] = cs.getPropertyValue('--' + k).trim(); });
+    colors.city = state.cityColor;
+    root.style.setProperty('--city', state.cityColor);
     try { Plugins.StatusBar && Plugins.StatusBar.setStyle({ style: mode === 'dark' ? 'DARK' : 'LIGHT' }); } catch {}
     globe.dirty = true;
     plan.redraw();
@@ -194,6 +199,28 @@
   });
   $('#recenter').onclick = () => (state.mode === 'globe' ? globe.reset() : plan.reset());
 
+  /* ---------- Villes : dessin ---------- */
+  function drawCities(ctx, project, r, labelsAll, selected, k = 1) {
+    const codes = Object.keys(state.cities);
+    if (!codes.length) return;
+    ctx.save();
+    ctx.font = `600 ${12 / k}px Outfit, system-ui, sans-serif`;
+    ctx.textBaseline = 'middle';
+    codes.forEach(code => (state.cities[code] || []).forEach(city => {
+      const pt = project(city.c);
+      if (!pt) return;
+      ctx.beginPath(); ctx.arc(pt[0], pt[1], r, 0, Math.PI * 2);
+      ctx.fillStyle = colors.city; ctx.fill();
+      ctx.lineWidth = 1.5 / k; ctx.strokeStyle = '#000'; ctx.stroke();
+      if (labelsAll || code === selected) {
+        const x = pt[0] + r + 4 / k;
+        ctx.lineWidth = 3 / k; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.strokeText(city.n, x, pt[1]);
+        ctx.fillStyle = '#fff'; ctx.fillText(city.n, x, pt[1]);
+      }
+    }));
+    ctx.restore();
+  }
+
   /* ---------- Globe ---------- */
   const globe = (() => {
     const canvas = $('#globe');
@@ -204,7 +231,7 @@
     const g = { dirty: true, active: true, running: false, selected: null };
     let W = 0, H = 0, dpr = 1, base = 1, zoom = 1;
     const rot = [-8, -38, 0];
-    let vel = [0, 0], lastInteract = 0, anim = null, hiPending = false;
+    let vel = [0, 0], lastInteract = 0, anim = null, hiPending = false, offY = 0;
 
     g.resize = () => {
       const r = canvas.getBoundingClientRect();
@@ -215,7 +242,7 @@
       base = Math.min(W, H - 200) / 2 * 0.78;
       g.dirty = true;
     };
-    const cy = () => H / 2 + 6;
+    const cy = () => H / 2 + 6 + offY;
     const radius = () => base * zoom;
     const clampLat = v => Math.max(-85, Math.min(85, v));
 
@@ -267,6 +294,8 @@
         } else { ctx.beginPath(); (G.byC.get(g.selected) || geo.feats).forEach(f => path(f)); ctx.stroke(); }
       }
 
+      drawCities(ctx, ll => (d3.geoDistance(ll, c) < Math.PI / 2 - 0.01 ? proj(ll) : null), Math.min(6, 3 + zoom * 0.25), zoom > 3.5, g.selected);
+
       const shade = ctx.createRadialGradient(X - R * 0.3, Y - R * 0.35, R * 0.15, X, Y, R);
       shade.addColorStop(0, 'rgba(255, 255, 255, .07)');
       shade.addColorStop(0.65, 'rgba(0, 0, 0, 0)');
@@ -289,6 +318,7 @@
         rot[0] = r[0]; rot[1] = r[1];
         zoom = anim.z0 + (anim.z1 - anim.z0) * e;
         g.dirty = motion = true;
+        if (anim.oy1 !== undefined) offY = anim.oy0 + (anim.oy1 - anim.oy0) * e;
         if (k >= 1) { const done = anim.done; anim = null; done && done(); }
       } else if (pointers.size) {
         motion = true;
@@ -376,6 +406,7 @@
       const X = W / 2, Y = cy();
       if (Math.hypot(x - X, y - Y) > radius()) return;
       proj.translate([X, Y]).scale(radius()).rotate(rot);
+      if (placing) return placeAt(proj.invert([x, y]));
       const c = proj.invert([X, Y]);
       let best = null, bd = 18;
       SMALL.forEach(code => {
@@ -393,7 +424,15 @@
       }
     }
 
-    g.focus = (code, zoomIn) => {
+    const fitZoom = (code, size) => {
+      const geo = GEO.get(code);
+      let a = 0.01;
+      const pts = [geo.center, ...(state.cities[code] || []).map(c => c.c)];
+      geo.feats.forEach(f => { const b = d3.geoBounds(f); pts.push(b[0], b[1], [b[0][0], b[1][1]], [b[1][0], b[0][1]]); });
+      pts.forEach(pt => { a = Math.max(a, d3.geoDistance(geo.center, pt)); });
+      return Math.max(1, Math.min(40, (size / 2) / (base * Math.sin(Math.min(a * 1.08, 1.4)))));
+    };
+    g.focus = (code, zoomIn, area) => {
       const geo = GEO.get(code);
       g.selected = code;
       g.dirty = true;
@@ -401,8 +440,23 @@
       const target = [-geo.center[0], clampLat(-geo.center[1])];
       const from = [rot[0], rot[1]];
       target[0] = from[0] + ((((target[0] - from[0]) % 360) + 540) % 360 - 180);
-      anim = { t0: performance.now(), dur: 900, interp: d3.interpolate(from, target), z0: zoom, z1: zoomIn ? Math.max(zoom, geo.small ? 2.6 : 1.25) : zoom };
+      let z1 = zoom, oy1 = offY;
+      if (zoomIn && area) {
+        z1 = fitZoom(code, Math.min(W - 40, area.bottom - area.top - 30));
+        oy1 = (area.top + area.bottom) / 2 - (H / 2 + 6);
+      }
+      anim = { t0: performance.now(), dur: 950, interp: d3.interpolate(from, target), z0: zoom, z1, oy0: offY, oy1 };
     };
+    g.flyTo = (ll, z) => {
+      const from = [rot[0], rot[1]];
+      const target = [-ll[0], clampLat(-ll[1])];
+      target[0] = from[0] + ((((target[0] - from[0]) % 360) + 540) % 360 - 180);
+      anim = { t0: performance.now(), dur: 800, interp: d3.interpolate(from, target), z0: zoom, z1: Math.max(zoom, z), oy0: offY, oy1: offY };
+    };
+    g.unfocus = () => {
+      anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: Math.min(zoom, 1), oy0: offY, oy1: 0 };
+    };
+    g.top = () => canvas.getBoundingClientRect().top;
     g.lookAt = (code, z) => {
       const geo = GEO.get(code);
       if (!geo) return;
@@ -473,6 +527,8 @@
         ctx.beginPath(); ctx.arc(x, y, v ? rv : rv * 0.65, 0, Math.PI * 2);
         ctx.fillStyle = v ? colors.accent : colors.land; ctx.fill();
       });
+      if (interactive) drawCities(ctx, ll => proj(ll), 3.2 / t.k, t.k > 4, m.selected, t.k);
+      else drawCities(ctx, ll => proj(ll), 1.6, false, null);
       if (m.selected) {
         ctx.lineWidth = 2 / t.k; ctx.strokeStyle = colors.brand;
         const p = P.byC.get(m.selected);
@@ -482,6 +538,20 @@
     }
     m.redraw = () => { if (m.ready && !raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
     m.select = code => { m.selected = code; m.redraw(); };
+    m.zoomTo = (code, area) => {
+      if (!zoomer || !GEO.has(code)) return;
+      const geo = GEO.get(code);
+      const path = d3.geoPath(proj);
+      const pts = [proj(geo.center), ...(state.cities[code] || []).map(c => proj(c.c))];
+      geo.feats.forEach(f => { const b = path.bounds(f); pts.push(b[0], b[1]); });
+      const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+      const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+      const top = area ? area.top : 70, bottom = area ? area.bottom : H - 70;
+      const k = Math.max(1, Math.min(40, 0.85 / Math.max((x1 - x0 + 6) / W, (y1 - y0 + 6) / (bottom - top))));
+      const tr = d3.zoomIdentity.translate(W / 2 - k * (x0 + x1) / 2, (top + bottom) / 2 - k * (y0 + y1) / 2).scale(k);
+      d3.select(canvas).transition().duration(800).call(zoomer.transform, tr);
+    };
+    m.top = () => canvas.getBoundingClientRect().top;
     m.reset = () => zoomer && d3.select(canvas).transition().duration(600).call(zoomer.transform, home);
     m.invalidate = () => { m.ready = false; key = ''; };
     if (interactive) {
@@ -489,6 +559,7 @@
         if (!m.ready) return;
         const r = canvas.getBoundingClientRect();
         const [px, py] = t.invert([e.clientX - r.left, e.clientY - r.top]);
+        if (placing) { const ll = proj.invert([px, py]); return ll && placeAt(ll); }
         let best = null, bd = 14 / t.k;
         SMALL.forEach(code => {
           const [x, y] = P.pts.get(code);
@@ -574,7 +645,7 @@
     const row = (c, q, sub) =>
       `<li data-row="${c.c}" data-q="${q}"${sub ? ' class="sub"' : ''}><button class="open" data-open="${c.c}"><img src="${flagSrc(c.c)}" alt="" loading="lazy"><div><div class="nm">${c.name}</div><div class="ph" data-ph="${c.c}"></div></div></button><button class="check${isVisited(c.c) ? ' on' : ''}" data-toggle="${c.c}" aria-label="Visité">${CHECK}</button></li>`;
     ul.innerHTML = COUNTRIES.map(c => row(c, searchKey(c), false)
-      + SUBS.filter(s => s.p === c.c && GEO.has(s.c)).map(s => row(s, norm(s.name + ' ' + c.name), true)).join('')).join('')
+      + SUBS.filter(s => s.p === c.c && GEO.has(s.c)).map(s => row(s, norm(s.name + ' ' + (s.g || '') + ' ' + c.name), true)).join('')).join('')
       + '<li class="empty" hidden>Aucun pays trouvé</li>';
     ul.addEventListener('click', e => {
       const t = e.target.closest('[data-toggle]');
@@ -630,7 +701,7 @@
     const y = state.years[c.c];
     $('#sheet-flag').src = flagSrc(c.c);
     $('#sheet-name').textContent = c.name;
-    const parent = SUBMAP.has(c.c) ? ` · ${byCode.get(c.p).name}` : '';
+    const parent = SUBMAP.has(c.c) ? ` · ${c.g ? c.g + ', ' : ''}${byCode.get(c.p).name}` : '';
     $('#sheet-sub').textContent = (v ? (y ? `Visité · première visite en ${y}` : 'Visité') : 'Pas encore visité') + parent;
     const btn = $('#visit-btn');
     btn.classList.toggle('on', v);
@@ -769,9 +840,17 @@
     sheetEl.style.transform = '';
     sheetEl.classList.add('show');
     $('#scrim').classList.add('show');
-    globe.focus(code, true);
     plan.select(code);
+    renderCities();
     loadAlbum();
+    requestAnimationFrame(() => focusArea(code));
+  }
+  function focusArea(code) {
+    const sheetTop = window.innerHeight - sheetEl.offsetHeight;
+    const off = state.mode === 'globe' ? globe.top() : plan.top();
+    const area = { top: 78, bottom: Math.max(240, sheetTop - off - 8) };
+    if (state.mode === 'globe') globe.focus(code, true, area);
+    else plan.zoomTo(code, area);
   }
   function closeSheet() {
     if (!sheet.open) return;
@@ -780,6 +859,7 @@
     sheetEl.style.transform = '';
     $('#scrim').classList.remove('show');
     globe.selected = null; globe.dirty = true;
+    if (globe.active && !placing) globe.unfocus();
     plan.select(null);
     setTimeout(() => { if (!sheet.open) sheet.photos = []; }, 400);
   }
@@ -810,23 +890,64 @@
   $('#add-photo').onclick = () => $('#file').click();
   $('#hl-open').onclick = () => (sheet.photos.length ? openViewer(0) : $('#file').click());
 
-  async function resize(file, max, q) {
-    let src;
-    try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  async function decode(file) {
+    try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
     catch {
-      src = await new Promise((res, rej) => {
+      return new Promise((res, rej) => {
         const i = new Image(), u = URL.createObjectURL(file);
         i.onload = () => { URL.revokeObjectURL(u); res(i); };
         i.onerror = () => { URL.revokeObjectURL(u); rej(new Error('image')); };
         i.src = u;
       });
     }
-    const w = src.width, h = src.height, s = Math.min(1, max / Math.max(w, h));
+  }
+  function encode(src, max, q) {
+    const w = src.width, h = src.height, sc = Math.min(1, max / Math.max(w, h));
     const cv = document.createElement('canvas');
-    cv.width = Math.round(w * s); cv.height = Math.round(h * s);
+    cv.width = Math.round(w * sc); cv.height = Math.round(h * sc);
     cv.getContext('2d').drawImage(src, 0, 0, cv.width, cv.height);
-    if (src.close) src.close();
-    return new Promise(res => cv.toBlob(res, 'image/jpeg', q));
+    return new Promise((res, rej) => cv.toBlob(b => { cv.width = cv.height = 0; b ? res(b) : rej(new Error('encode')); }, 'image/jpeg', q));
+  }
+
+  const FSP = Plugins.Filesystem;
+  const NATIVE_FS = !!(FSP && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const blobToB64 = async blob => (await toDataURL(blob)).split(',')[1];
+  const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  async function storePhoto(code, blob, date, id = newId()) {
+    const rec = { id, country: code, date: date || Date.now() };
+    if (NATIVE_FS) {
+      rec.file = `photos/${id}.jpg`;
+      await FSP.writeFile({ path: rec.file, data: await blobToB64(blob), directory: 'DATA', recursive: true });
+    } else rec.blob = blob;
+    await PhotoDB.add(rec);
+  }
+  async function photoSrc(p) {
+    if (p.file) { const { uri } = await FSP.getUri({ path: p.file, directory: 'DATA' }); return window.Capacitor.convertFileSrc(uri); }
+    return URL.createObjectURL(p.blob);
+  }
+  async function photoDataURL(p) {
+    if (p.file) { const r = await FSP.readFile({ path: p.file, directory: 'DATA' }); return 'data:image/jpeg;base64,' + r.data; }
+    return toDataURL(p.blob);
+  }
+  async function deletePhoto(p) {
+    await PhotoDB.remove(p.id);
+    if (p.file) { try { await FSP.deleteFile({ path: p.file, directory: 'DATA' }); } catch {} }
+  }
+  async function migratePhotos() {
+    const legacy = { 'ES-CN': 'ES', 'ES-IB': 'ES', 'PT-20': 'PT' };
+    const ids = await PhotoDB.keys();
+    for (const id of ids) {
+      const p = await PhotoDB.get(id);
+      if (!p) continue;
+      const country = legacy[p.country] || p.country;
+      if (NATIVE_FS && p.blob && !p.file) {
+        try {
+          const file = `photos/${p.id}.jpg`;
+          await FSP.writeFile({ path: file, data: await blobToB64(p.blob), directory: 'DATA', recursive: true });
+          await PhotoDB.add({ id: p.id, country, date: p.date, file });
+        } catch { return; }
+      } else if (country !== p.country) await PhotoDB.add({ ...p, country });
+    }
   }
 
   $('#file').addEventListener('change', async e => {
@@ -839,10 +960,13 @@
     let ok = 0;
     for (const f of files) {
       try {
-        const [blob, thumb] = await Promise.all([resize(f, 2400, 0.88), resize(f, 480, 0.8)]);
-        await PhotoDB.add({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, country: code, blob, thumb, date: Date.now() });
+        const src = await decode(f);
+        const blob = await encode(src, 2048, 0.85);
+        if (src.close) src.close();
+        await storePhoto(code, blob);
         ok++;
-      } catch {}
+        $('#hl-label').textContent = `${ok}/${files.length}`;
+      } catch (err) { console.error('photo', err); }
     }
     $('#hl-open').classList.remove('loading');
     photoCounts[code] = (photoCounts[code] || 0) + ok;
@@ -852,6 +976,126 @@
     else if (ok) toast(`${ok} photo${ok > 1 ? 's' : ''} ajoutée${ok > 1 ? 's' : ''}`);
     if (sheet.code === code && sheet.open) loadAlbum();
   });
+
+  /* ---------- Villes ---------- */
+  function renderCities() {
+    const list = state.cities[sheet.code] || [];
+    $('#city-count').textContent = list.length ? `${list.length} ville${list.length > 1 ? 's' : ''}` : '';
+    $('#city-chips').innerHTML = list.map((c, i) =>
+      `<span class="chip"><button data-ci="${i}"><i></i>${esc(c.n)}</button><button class="x" data-del="${i}" aria-label="Retirer ${esc(c.n)}">×</button></span>`).join('')
+      + '<button class="chip add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Ajouter une ville</button>';
+  }
+  $('#city-chips').addEventListener('click', async e => {
+    const code = sheet.code, list = state.cities[code] || [];
+    if (e.target.closest('#city-add')) return openCityPick(code);
+    const d = e.target.closest('[data-del]');
+    if (d) {
+      const c = list[+d.dataset.del];
+      if (!await ask(`Retirer ${c.n} de tes villes ?`, 'Retirer')) return;
+      list.splice(+d.dataset.del, 1);
+      if (!list.length) delete state.cities[code];
+      save(); renderCities(); globe.dirty = true; plan.redraw(); mini.redraw();
+      return;
+    }
+    const b = e.target.closest('[data-ci]');
+    if (b && list[+b.dataset.ci]) {
+      if (state.mode === 'globe') globe.flyTo(list[+b.dataset.ci].c, 6);
+    }
+  });
+
+  const cityCache = {};
+  async function loadCities(code) {
+    const sub = SUBMAP.get(code);
+    const tryLoad = async cc => {
+      if (cityCache[cc]) return cityCache[cc];
+      try { const r = await fetch(`data/cities/${cc.toUpperCase()}.json`); if (!r.ok) throw 0; return (cityCache[cc] = await r.json()); }
+      catch { return null; }
+    };
+    if (!sub) return (await tryLoad(code)) || [];
+    const own = sub.f && sub.f.toUpperCase() !== sub.p ? await tryLoad(sub.f) : null;
+    if (own) return own;
+    const all = (await tryLoad(sub.p)) || [];
+    const geo = GEO.get(code);
+    if (!geo) return [];
+    const b = geo.feats.map(f => d3.geoBounds(f));
+    return all.filter(([, x, y]) => b.some(([[x0, y0], [x1, y1]]) => x >= x0 - 0.05 && x <= x1 + 0.05 && y >= y0 - 0.05 && y <= y1 + 0.05));
+  }
+  let pickCode = null, pickList = [];
+  async function openCityPick(code) {
+    pickCode = code;
+    $('#city-title').textContent = info(code).name;
+    $('#city-search').value = '';
+    $('#city-results').innerHTML = '<li class="empty">Chargement…</li>';
+    $('#citypick').classList.add('show');
+    pickList = await loadCities(code);
+    renderCityResults();
+  }
+  const closeCityPick = () => { $('#citypick').classList.remove('show'); $('#city-search').blur(); };
+  function renderCityResults() {
+    const raw = $('#city-search').value.trim(), q = norm(raw);
+    const have = new Set((state.cities[pickCode] || []).map(c => c.n));
+    let res = q ? pickList.filter(c => norm(c[0]).startsWith(q)) : pickList.slice(0, 40);
+    if (q && res.length < 40) res = res.concat(pickList.filter(c => !norm(c[0]).startsWith(q) && norm(c[0]).includes(q)));
+    res = res.slice(0, 60);
+    $('#city-results').innerHTML = res.map((c, i) =>
+      `<li><button data-pick="${i}"${have.has(c[0]) ? ' class="on"' : ''}><span>${esc(c[0])}</span>${have.has(c[0]) ? CHECK : ''}</button></li>`).join('')
+      + (raw ? `<li><button class="place" data-place="1"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Placer « ${esc(raw)} » sur la carte</span></button></li>` : '')
+      + (!res.length && !raw ? '<li class="empty">Aucune ville en base pour ce lieu. Tape un nom pour la placer sur la carte.</li>' : '');
+    $('#city-results').dataset.res = JSON.stringify(res.map(c => [c[0], c[1], c[2]]));
+  }
+  let cityTimer;
+  $('#city-search').addEventListener('input', () => { clearTimeout(cityTimer); cityTimer = setTimeout(renderCityResults, 90); });
+  $('#city-close').onclick = closeCityPick;
+  function addCity(code, n, ll) {
+    const list = state.cities[code] || (state.cities[code] = []);
+    if (list.some(c => c.n === n)) return toast(`${n} est déjà dans tes villes`);
+    list.push({ n, c: [+ll[0].toFixed(4), +ll[1].toFixed(4)] });
+    if (!isVisited(code)) state.visited[code] = Date.now();
+    save();
+    renderCounters();
+    updateVisitedUI(code);
+    if (sheet.code === code) renderCities();
+    globe.dirty = true; plan.redraw(); mini.redraw();
+    toast(`${n} ajoutée`);
+  }
+  $('#city-results').addEventListener('click', e => {
+    const b = e.target.closest('[data-pick]');
+    if (b) {
+      const c = JSON.parse($('#city-results').dataset.res || '[]')[+b.dataset.pick];
+      if (!c) return;
+      addCity(pickCode, c[0], [c[1], c[2]]);
+      closeCityPick();
+      if (sheet.open && sheet.code === pickCode) requestAnimationFrame(() => focusArea(pickCode));
+      return;
+    }
+    if (e.target.closest('[data-place]')) startPlacing(pickCode, $('#city-search').value.trim());
+  });
+
+  let placing = null;
+  function startPlacing(code, name) {
+    placing = { code, name };
+    closeCityPick();
+    sheetEl.classList.remove('show');
+    $('#scrim').classList.remove('show');
+    $('#place-name').textContent = name;
+    $('#placebar').classList.add('show');
+  }
+  function stopPlacing() {
+    const p = placing;
+    placing = null;
+    $('#placebar').classList.remove('show');
+    if (p && sheet.open && sheet.code === p.code) {
+      sheetEl.classList.add('show');
+      $('#scrim').classList.add('show');
+      sheet.openedAt = performance.now();
+    }
+  }
+  function placeAt(ll) {
+    if (!placing || !ll) return;
+    addCity(placing.code, placing.name, ll);
+    stopPlacing();
+  }
+  $('#place-cancel').onclick = stopPlacing;
 
   /* ---------- Visionneuse (stories) ---------- */
   const DUR = 5000;
@@ -867,10 +1111,11 @@
     goStory(i);
     requestAnimationFrame(storyLoop);
   }
-  const urlFor = i => {
+  const urlFor = async i => {
     const p = sheet.photos[i];
     if (!p) return null;
-    return story.urls[p.id] || (story.urls[p.id] = URL.createObjectURL(p.blob));
+    if (!story.urls[p.id]) story.urls[p.id] = await photoSrc(p);
+    return story.urls[p.id];
   };
   function goStory(i) {
     const n = sheet.photos.length;
@@ -879,8 +1124,9 @@
     story.elapsed = 0; story.paused = false; story.ready = false;
     const p = sheet.photos[story.i];
     sImg.onload = () => { story.ready = true; story.t0 = performance.now(); };
-    sImg.src = urlFor(story.i);
-    urlFor(story.i + 1);
+    const token = story.token = (story.token || 0) + 1;
+    urlFor(story.i).then(u => { if (u && token === story.token) sImg.src = u; }).catch(() => {});
+    urlFor(story.i + 1).then(u => { if (u) new Image().src = u; }).catch(() => {});
     $('#story-date').textContent = new Date(p.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     $$('#story-bars b').forEach((b, k) => { b.style.width = k < story.i ? '100%' : '0%'; });
   }
@@ -905,7 +1151,7 @@
     $('#viewer').style.transform = '';
     setTimeout(() => {
       if (story.open) return;
-      Object.values(story.urls).forEach(u => URL.revokeObjectURL(u));
+      Object.values(story.urls).forEach(u => u.startsWith('blob:') && URL.revokeObjectURL(u));
       story.urls = {}; sImg.removeAttribute('src');
     }, 300);
   }
@@ -914,8 +1160,8 @@
     pause();
     if (!await ask('Supprimer cette photo de l\'album ?', 'Supprimer')) return resume();
     const p = sheet.photos[story.i];
-    try { await PhotoDB.remove(p.id); } catch { resume(); return toast('Suppression impossible'); }
-    if (story.urls[p.id]) { URL.revokeObjectURL(story.urls[p.id]); delete story.urls[p.id]; }
+    try { await deletePhoto(p); } catch { resume(); return toast('Suppression impossible'); }
+    if (story.urls[p.id]) { if (story.urls[p.id].startsWith('blob:')) URL.revokeObjectURL(story.urls[p.id]); delete story.urls[p.id]; }
     photoCounts[sheet.code] = Math.max(0, (photoCounts[sheet.code] || 1) - 1);
     renderPhotoCounts();
     const i = story.i;
@@ -956,11 +1202,19 @@
     $('#swatches').innerHTML = PRESETS.map(c =>
       `<button class="swatch${c.toLowerCase() === state.color.toLowerCase() ? ' active' : ''}" style="background:${c}" data-color="${c}" aria-label="Couleur ${c}"></button>`).join('');
     $('#custom-color').value = state.color;
+    $('#city-swatches').innerHTML = CITY_COLORS.map(c =>
+      `<button class="swatch${c.toLowerCase() === state.cityColor.toLowerCase() ? ' active' : ''}" style="background:${c}" data-city-color="${c}" aria-label="Couleur ${c}"></button>`).join('');
     $$('#theme button').forEach(b => b.classList.toggle('active', b.dataset.theme === state.theme));
     $('#autorotate').checked = state.autoRotate;
     const h = byCode.get(state.home);
     $('#home-value').textContent = h ? h.name : 'Choisir';
   }
+  const CITY_COLORS = ['#FFC93C', '#FFFFFF', '#FF6B6B', '#4CC9F0', '#B388FF', '#FF9F1C', '#7CFFB2', '#FF4FD8'];
+  $('#city-swatches').addEventListener('click', e => {
+    const b = e.target.closest('[data-city-color]');
+    if (!b) return;
+    state.cityColor = b.dataset.cityColor; save(); applyTheme(); renderSettings();
+  });
   const setColor = c => { state.color = c; save(); applyTheme(); renderSettings(); };
   $('#swatches').addEventListener('click', e => { const b = e.target.closest('[data-color]'); b && setColor(b.dataset.color); });
   $('#custom-color').addEventListener('input', e => { state.color = e.target.value; applyTheme(); });
@@ -1002,7 +1256,8 @@
         app: 'nomad', format: 1, exportedAt: new Date().toISOString(),
         settings: { color: state.color, theme: state.theme, autoRotate: state.autoRotate },
         visited: state.visited,
-        years: state.years
+        years: state.years,
+        cities: state.cities
       });
       const FS = Plugins.Filesystem, Share = Plugins.Share;
       const native = FS && Share && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
@@ -1017,7 +1272,7 @@
       for (let i = 0; i < ids.length; i++) {
         const p = await PhotoDB.get(ids[i]);
         if (!p) continue;
-        const item = { id: p.id, country: p.country, date: p.date, image: await toDataURL(p.blob), thumb: p.thumb ? await toDataURL(p.thumb) : null };
+        const item = { id: p.id, country: p.country, date: p.date, image: await photoDataURL(p) };
         await write((i ? ',' : '') + JSON.stringify(item));
       }
       await write(']}');
@@ -1054,6 +1309,11 @@
     let ok = 0;
     try {
       codes.forEach(c => { if (!state.visited[c]) state.visited[c] = Number(data.visited[c]) || Date.now(); });
+      Object.entries(data.cities || {}).forEach(([c, list]) => {
+        if (!known(c) || !Array.isArray(list)) return;
+        const cur = state.cities[c] || (state.cities[c] = []);
+        list.forEach(x => { if (x && x.n && Array.isArray(x.c) && !cur.some(y => y.n === x.n)) cur.push({ n: String(x.n), c: [Number(x.c[0]), Number(x.c[1])] }); });
+      });
       Object.entries(data.years || {}).forEach(([c, y]) => { if (known(c) && !state.years[c] && Number(y) > 1900) state.years[c] = Number(y); });
       const s = data.settings || {};
       if (/^#[0-9a-f]{6}$/i.test(s.color)) state.color = s.color;
@@ -1063,8 +1323,7 @@
       for (const p of photos) {
         try {
           const blob = await (await fetch(p.image)).blob();
-          const thumb = p.thumb ? await (await fetch(p.thumb)).blob() : await resize(blob, 480, 0.8);
-          await PhotoDB.add({ id: String(p.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`), country: p.country, blob, thumb, date: Number(p.date) || Date.now() });
+          await storePhoto(p.country, blob, Number(p.date) || Date.now(), String(p.id || newId()));
           ok++;
         } catch {}
       }
@@ -1086,6 +1345,8 @@
       if ($('#onboard').classList.contains('show')) { if (!onboardFirst) closeOnboard(); return; }
       if ($('#years').classList.contains('show')) return yearResolve ? closeYears(undefined) : hideModal();
       if (story.open) return closeViewer();
+      if ($('#citypick').classList.contains('show')) return closeCityPick();
+      if (placing) return stopPlacing();
       if (finderOpen()) return closeFinder();
       if (sheet.open) return closeSheet();
       if (current !== 'map') return show('map');
@@ -1163,24 +1424,22 @@
       const name = $('#intro-name');
       name.getAnimations().forEach(a => a.cancel());
       name.innerHTML = 'NOMAD'.split('').map((l, i) => `<span style="--i:${i}">${l}</span>`).join('');
-      await run(3200, (e, k) => {
-        const appear = d3.easeBackOut.overshoot(1.3)(Math.min(1, k / 0.22));
-        draw(spin(e), Math.max(0.01, appear), Math.min(1, k / 0.15), 0, true);
+      await run(1700, (e, k) => {
+        const appear = d3.easeBackOut.overshoot(1.3)(Math.min(1, k / 0.25));
+        draw(spin(e), Math.max(0.01, appear), Math.min(1, k / 0.15), Math.max(0, (k - 0.7) / 0.3), true);
       }, d3.easeCubicOut);
-      await run(650, e => draw(target, 1, 1, e, false), d3.easeCubicInOut);
-      if (!skip) await wait(450);
       const veil = $('#veil');
-      $('#intro-name').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
-      await run(1300, (e, k) => {
+      $('#intro-name').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'forwards' });
+      await run(900, (e, k) => {
         draw(d3.interpolate(target, close)(Math.min(1, e * 2.5)), 1 + 34 * e, 1, 1, true);
-        veil.style.opacity = Math.max(0, (k - 0.45) / 0.55);
+        veil.style.opacity = Math.max(0, (k - 0.35) / 0.65);
       }, d3.easeCubicIn);
       veil.style.opacity = 1;
       el.classList.remove('show');
       document.body.classList.remove('intro');
       globe.hold(3500);
-      await wait(150);
-      await veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 750, easing: 'ease-out', fill: 'forwards' }).finished;
+      await wait(80);
+      await veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, easing: 'ease-out', fill: 'forwards' }).finished;
       veil.getAnimations().forEach(a => a.cancel());
       veil.style.opacity = 0;
     }
@@ -1238,6 +1497,6 @@
     if (current === 'map' && state.mode === 'plan') plan.init();
     if (current === 'passport') mini.init();
   });
-  PhotoDB.counts().then(c => { photoCounts = c; renderPhotoCounts(); }).catch(() => {});
+  migratePhotos().catch(() => {}).then(() => PhotoDB.counts()).then(c => { photoCounts = c; renderPhotoCounts(); }).catch(() => {});
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 })();
