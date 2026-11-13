@@ -208,8 +208,8 @@
       ctx.clearRect(0, 0, W, H);
 
       const halo = ctx.createRadialGradient(X, Y, R * 0.95, X, Y, R * 1.25);
-      halo.addColorStop(0, 'rgba(110, 130, 255, .30)');
-      halo.addColorStop(1, 'rgba(110, 130, 255, 0)');
+      halo.addColorStop(0, 'rgba(255, 255, 255, .10)');
+      halo.addColorStop(1, 'rgba(255, 255, 255, 0)');
       ctx.fillStyle = halo;
       ctx.beginPath(); ctx.arc(X, Y, R * 1.25, 0, Math.PI * 2); ctx.fill();
 
@@ -254,7 +254,7 @@
       shade.addColorStop(1, 'rgba(0, 0, 0, .38)');
       ctx.fillStyle = shade;
       ctx.beginPath(); ctx.arc(X, Y, R, 0, Math.PI * 2); ctx.fill();
-      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(160, 175, 255, .22)'; ctx.stroke();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255, 255, 255, .14)'; ctx.stroke();
     }
 
     let prev = 0;
@@ -944,7 +944,7 @@
     const el = $('#intro'), canvas = $('#intro-globe'), ctx = canvas.getContext('2d');
     const proj = d3.geoOrthographic().clipAngle(90);
     const path = d3.geoPath(proj, ctx);
-    const C = { ocean: '#1E2638', ocean2: '#2B3554', land: '#EFE7D6', line: '#1E2638' };
+    const C = { ocean: '#141414', ocean2: '#262626', land: '#D9D9D9', line: '#141414' };
     const stars = d3.range(26).map(() => [Math.random(), Math.random(), 0.6 + Math.random() * 1.2, Math.random()]);
     let W, H, dpr, skip = false;
     const size = () => {
@@ -1011,14 +1011,21 @@
         draw(spin(e), R * Math.max(0.01, appear), Math.min(1, k / 0.15), 0, true);
       }, d3.easeCubicOut);
       await run(650, e => draw(target, R, 1, e, false), d3.easeCubicInOut);
-      if (!skip) await wait(700);
+      if (!skip) await wait(450);
       const veil = $('#veil');
-      await veil.animate([{ opacity: 0 }, { opacity: 1 }], { duration: skip ? 250 : 750, easing: 'ease-in', fill: 'forwards' }).finished;
+      $('#intro-name').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
+      await run(1300, (e, k) => {
+        draw(target, R * (1 + 34 * e), 1, 1, true);
+        veil.style.opacity = Math.max(0, (k - 0.45) / 0.55);
+      }, d3.easeCubicIn);
+      veil.style.opacity = 1;
       el.classList.remove('show');
       document.body.classList.remove('intro');
       globe.hold(3500);
       await wait(150);
       await veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 750, easing: 'ease-out', fill: 'forwards' }).finished;
+      veil.getAnimations().forEach(a => a.cancel());
+      veil.style.opacity = 0;
     }
     el.addEventListener('click', () => { skip = true; });
     return { play };

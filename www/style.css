@@ -6,22 +6,22 @@
 }
 
 :root {
-  --bg: #F4F3F8;
+  --bg: #F2F2F2;
   --surface: #FFFFFF;
-  --surface-2: #ECEAF3;
-  --ink: #15142A;
-  --muted: #6E6B85;
-  --line: rgba(21, 20, 42, .09);
-  --brand: #F6BF26;
-  --brand-ink: #1A1405;
-  --ocean: #1C2340;
-  --ocean-2: #2A3460;
-  --land: #EFE7D6;
-  --border: rgba(28, 35, 64, .55);
+  --surface-2: #E6E6E6;
+  --ink: #111111;
+  --muted: #6B6B6B;
+  --line: rgba(0, 0, 0, .09);
+  --brand: #111111;
+  --brand-ink: #FFFFFF;
+  --ocean: #1E1E1E;
+  --ocean-2: #2E2E2E;
+  --land: #D6D6D6;
+  --border: rgba(0, 0, 0, .45);
   --graticule: rgba(255, 255, 255, .05);
   --accent: #2EBD59;
   --accent-ink: #FFFFFF;
-  --shadow: 0 10px 30px rgba(21, 20, 42, .12);
+  --shadow: 0 10px 30px rgba(0, 0, 0, .12);
   --radius: 20px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -32,16 +32,18 @@
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --bg: #0C0B1A;
-  --surface: #15142A;
-  --surface-2: #201E3A;
-  --ink: #F4F1EA;
-  --muted: #8D8AA5;
-  --line: rgba(255, 255, 255, .08);
-  --ocean: #0B1029;
-  --ocean-2: #17204A;
-  --land: #2C2E55;
-  --border: rgba(150, 155, 220, .28);
+  --bg: #000000;
+  --surface: #121212;
+  --surface-2: #1E1E1E;
+  --ink: #F2F2F2;
+  --muted: #8A8A8A;
+  --line: rgba(255, 255, 255, .09);
+  --brand: #EDEDED;
+  --brand-ink: #000000;
+  --ocean: #0D0D0D;
+  --ocean-2: #1C1C1C;
+  --land: #3A3A3A;
+  --border: rgba(255, 255, 255, .16);
   --graticule: rgba(255, 255, 255, .035);
   --shadow: 0 12px 34px rgba(0, 0, 0, .5);
   color-scheme: dark;
@@ -297,7 +299,7 @@ input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 8px; }
 .tab:active i { transform: scale(.92); }
 
 /* ---------- Fiche pays ---------- */
-#scrim { position: fixed; inset: 0; background: rgba(5, 4, 14, .55); z-index: 20; opacity: 0; pointer-events: none; transition: opacity .3s; }
+#scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, .6); z-index: 20; opacity: 0; pointer-events: none; transition: opacity .3s; }
 #scrim.show { opacity: 1; pointer-events: auto; }
 #sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 21;
@@ -381,14 +383,14 @@ body.intro #tabbar { opacity: 0; transform: translateY(100%); pointer-events: no
 body.intro .map-top { opacity: 0; transform: translateY(-24px); }
 body.intro .map-bottom { opacity: 0; transform: translateY(24px); pointer-events: none; }
 #intro {
-  position: fixed; inset: 0; z-index: 60; background: #07060F; display: none;
+  position: fixed; inset: 0; z-index: 60; background: #000; display: none;
 }
 #intro.show { display: block; }
 #intro-globe { position: absolute; inset: 0; width: 100%; height: 100%; }
 #intro-name {
   position: absolute; left: 0; right: 0; top: calc(50% - 30px + 24vmin + 34px);
   text-align: center; font-size: 30px; font-weight: 600; letter-spacing: 6px; text-transform: uppercase;
-  color: #EFE7D6; opacity: 0;
+  color: #EDEDED; opacity: 0;
 }
 #veil { position: fixed; inset: 0; z-index: 65; background: #000; opacity: 0; pointer-events: none; }
 

@@ -3,6 +3,6 @@
   "appName": "Nomad",
   "webDir": "www",
   "android": {
-    "backgroundColor": "#0F131B"
+    "backgroundColor": "#000000"
   }
 }
