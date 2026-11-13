@@ -190,12 +190,25 @@
 
   <div id="years" aria-hidden="true">
     <div class="years-box">
-      <h3>Première visite</h3>
-      <p id="years-sub"></p>
-      <div class="years-grid" id="years-grid"></div>
-      <div class="years-actions">
-        <button id="years-cancel">Annuler</button>
-        <button id="years-skip">Je ne sais plus</button>
+      <button class="icon-btn years-x" id="years-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <div id="step-year">
+        <span class="eyebrow">Première visite</span>
+        <h3 id="years-title"></h3>
+        <p>En quelle année as-tu visité ce lieu pour la première fois ?</p>
+        <div class="wheel"><div class="wheel-band"></div><div class="wheel-list" id="wheel"></div></div>
+        <div class="years-actions">
+          <button id="years-skip">Je ne sais plus</button>
+          <button id="years-ok" class="primary">Valider</button>
+        </div>
+      </div>
+      <div id="step-photos" hidden>
+        <div class="photo-hero"><span class="hl-ring"><svg id="step-shape" viewBox="0 0 100 100"></svg></span></div>
+        <h3 id="step-title"></h3>
+        <p>Ajoute tes photos de ce voyage pour créer ton album.</p>
+        <div class="years-actions">
+          <button id="photos-later">Plus tard</button>
+          <button id="photos-add" class="primary">Choisir des photos</button>
+        </div>
       </div>
     </div>
   </div>

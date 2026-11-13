@@ -680,23 +680,71 @@
     const y = await pickYear(code);
     if (y === undefined) return;
     setVisited(code, true, y);
+    if (!sheet.open || sheet.code !== code) {
+      if (finderOpen()) closeFinder();
+      if (current !== 'map') show('map');
+      openSheet(code);
+    }
+    askPhotos(code);
   }
 
-  let yearResolve = null;
+  /* Sélecteur d'année (roue) + étape photos */
+  const wheel = $('#wheel');
+  const IH = 44;
+  let years = [], yearResolve = null, wheelIdx = -1;
+  const modal = $('#years');
+  const step = name => { $('#step-year').hidden = name !== 'year'; $('#step-photos').hidden = name !== 'photos'; };
+  function markWheel() {
+    const k = Math.max(0, Math.min(years.length - 1, Math.round(wheel.scrollTop / IH)));
+    if (k === wheelIdx) return;
+    wheelIdx = k;
+    $$('div', wheel).forEach((el, n) => {
+      const d = Math.abs(n - k);
+      el.className = d === 0 ? 'on' : d === 1 ? 'near' : '';
+    });
+    if (navigator.vibrate && modal.classList.contains('show')) navigator.vibrate(3);
+  }
+  let wheelRaf = 0;
+  wheel.addEventListener('scroll', () => { if (!wheelRaf) wheelRaf = requestAnimationFrame(() => { wheelRaf = 0; markWheel(); }); });
+  wheel.addEventListener('click', e => {
+    const el = e.target.closest('[data-y]');
+    if (el) wheel.scrollTo({ top: years.indexOf(+el.dataset.y) * IH, behavior: 'smooth' });
+  });
   function pickYear(code, current) {
     const c = info(code);
     const now = new Date().getFullYear();
-    $('#years-sub').textContent = `En quelle année as-tu visité ce pays pour la première fois ? (${c.name})`;
-    $('#years-grid').innerHTML = d3.range(now, 1939, -1).map(y => `<button data-y="${y}"${y === current ? ' class="on"' : ''}>${y}</button>`).join('');
-    $('#years').classList.add('show');
-    $('#years-grid').scrollTop = 0;
+    years = d3.range(now, 1939, -1);
+    $('#years-title').textContent = c.name;
+    wheel.innerHTML = years.map(y => `<div data-y="${y}">${y}</div>`).join('');
+    wheelIdx = -1;
+    step('year');
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+    const k = Math.max(0, years.indexOf(current || now));
+    requestAnimationFrame(() => { wheel.scrollTop = k * IH; markWheel(); });
     return new Promise(r => { yearResolve = r; });
   }
-  const closeYears = v => { $('#years').classList.remove('show'); yearResolve && yearResolve(v); yearResolve = null; };
-  $('#years-grid').addEventListener('click', e => { const b = e.target.closest('[data-y]'); b && closeYears(+b.dataset.y); });
+  const hideModal = () => { modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true'); };
+  const closeYears = v => {
+    hideModal();
+    const r = yearResolve; yearResolve = null;
+    r && r(v);
+  };
+  $('#years-ok').onclick = () => closeYears(years[Math.round(wheel.scrollTop / IH)]);
   $('#years-skip').onclick = () => closeYears(null);
-  $('#years-cancel').onclick = () => closeYears(undefined);
-  $('#years').onclick = e => e.target.id === 'years' && closeYears(undefined);
+  $('#years-close').onclick = () => (yearResolve ? closeYears(undefined) : hideModal());
+  modal.onclick = e => { if (e.target === modal) yearResolve ? closeYears(undefined) : hideModal(); };
+
+  function askPhotos(code) {
+    $('#step-shape').innerHTML = shapeSVG(code);
+    $('#step-title').textContent = `Ton album : ${info(code).name}`;
+    step('photos');
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+  $('#photos-add').onclick = () => { hideModal(); $('#file').click(); };
+  $('#photos-later').onclick = hideModal;
+
   $('#year-row').onclick = async () => {
     const code = sheet.code;
     const y = await pickYear(code, state.years[code]);
@@ -1032,7 +1080,7 @@
     Plugins.App && Plugins.App.addListener('backButton', () => {
       if ($('#confirm').classList.contains('show')) return closeConfirm(false);
       if ($('#onboard').classList.contains('show')) { if (!onboardFirst) closeOnboard(); return; }
-      if ($('#years').classList.contains('show')) return closeYears(undefined);
+      if ($('#years').classList.contains('show')) return yearResolve ? closeYears(undefined) : hideModal();
       if (story.open) return closeViewer();
       if (finderOpen()) return closeFinder();
       if (sheet.open) return closeSheet();

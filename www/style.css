@@ -393,16 +393,37 @@ input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 8px; }
   transform: translateY(30px); transition: transform .3s var(--ease);
 }
 #years.show .years-box { transform: none; }
-.years-box h3 { margin: 0; font-size: 22px; font-weight: 700; }
-.years-box p { margin: 4px 0 14px; color: var(--muted); }
-.years-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; overflow-y: auto; min-height: 0; padding-bottom: 6px; }
-.years-grid button {
-  padding: 12px 0; border-radius: 12px; background: var(--surface-2); font-weight: 600; font-variant-numeric: tabular-nums;
+.years-box { position: relative; }
+.years-x { position: absolute; top: 16px; right: calc(16px + var(--safe-right)); }
+.years-box h3 { margin: 4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -.5px; padding-right: 48px; }
+.years-box p { margin: 4px 0 10px; color: var(--muted); }
+.wheel {
+  position: relative; height: 220px; margin: 6px 0 4px;
+  -webkit-mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent);
+  mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent);
 }
-.years-grid button.on, .years-grid button:active { background: var(--accent); color: var(--accent-ink); }
+.wheel-band {
+  position: absolute; left: 0; right: 0; top: 88px; height: 44px; border-radius: 14px;
+  background: var(--surface-2); pointer-events: none;
+}
+.wheel-list {
+  position: relative; height: 100%; overflow-y: auto; scroll-snap-type: y mandatory;
+  padding: 88px 0; scrollbar-width: none; overscroll-behavior: contain;
+}
+.wheel-list::-webkit-scrollbar { display: none; }
+.wheel-list div {
+  height: 44px; line-height: 44px; text-align: center; scroll-snap-align: center;
+  font-size: 20px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums;
+  opacity: .45; transition: font-size .15s, opacity .15s, color .15s;
+}
+.wheel-list div.near { opacity: .8; font-size: 22px; }
+.wheel-list div.on { opacity: 1; color: var(--ink); font-size: 28px; font-weight: 700; }
 .years-actions { display: flex; gap: 10px; margin-top: 12px; }
-.years-actions button { flex: 1; padding: 14px; border-radius: 14px; font-weight: 600; background: var(--surface-2); }
-.years-actions #years-skip { background: var(--brand); color: var(--brand-ink); }
+.years-actions button { flex: 1; padding: 15px; border-radius: 14px; font-weight: 600; background: var(--surface-2); }
+.years-actions .primary { background: var(--brand); color: var(--brand-ink); }
+.photo-hero { display: flex; justify-content: center; padding: 8px 0 14px; }
+.photo-hero .hl-ring { width: 112px; height: 112px; }
+#step-photos h3, #step-photos p { text-align: center; padding: 0; }
 .list-card em { font-style: normal; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
 
 /* ---------- Toast / confirmation ---------- */
