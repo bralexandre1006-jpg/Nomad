@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nomad</string>
+    <string name="title_activity_main">Nomad</string>
+    <string name="package_name">com.nomad.globe</string>
+    <string name="custom_url_scheme">com.nomad.globe</string>
+</resources>

@@ -67,9 +67,10 @@ Lors de la première session, complète un petit encadré Informations du projet
 ## Informations du projet
 
 - Nom : Nomad
-- Stack : à définir (dépôt vide)
-- applicationId : à définir
-- Workflow GitHub Actions : aucun pour l'instant
-- Signature : à définir (keystore via secrets GitHub Actions)
-- Version : versionCode entier incrémenté à chaque livraison, versionName semver (1.0.0)
-- Données locales : à définir
+- Stack : Capacitor 8 + HTML/CSS/JS vanilla (`www/`), d3-geo + topojson (globe/carte), flag-icons
+- applicationId : `com.nomad.globe`
+- Workflow GitHub Actions : `.github/workflows/android.yml` (artifact `Nomad-vX.Y.Z`)
+- Signature : keystore PKCS12 (alias `nomad`) via secrets `NOMAD_KEYSTORE_BASE64`, `NOMAD_KEYSTORE_PASSWORD`, `NOMAD_KEY_ALIAS`, `NOMAD_KEY_PASSWORD` ; config dans `android/app/build.gradle`
+- Version : `versionCode` (+1 à chaque livraison) et `versionName` semver dans `android/app/build.gradle`
+- Données locales : `localStorage` clé `nomad.v1` (pays visités, réglages) ; IndexedDB `nomad` / store `photos` (albums)
+- Généré au build (non versionné) : `www/vendor`, `www/flags`, `www/data` via `npm run build`

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="color-scheme" content="light dark">
+<title>Nomad</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <main id="views">
+    <section class="view view-full active" data-view="globe">
+      <canvas id="globe" aria-label="Globe interactif"></canvas>
+      <div class="hud"><div class="counter-card" data-counter></div></div>
+      <button class="fab" id="recenter" aria-label="Réinitialiser la vue">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
+      </button>
+    </section>
+
+    <section class="view view-full" data-view="map">
+      <svg id="map" aria-label="Carte du monde"></svg>
+      <div class="hud"><div class="counter-card" data-counter></div></div>
+      <button class="fab" id="map-reset" aria-label="Réinitialiser le zoom">
+        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
+    </section>
+
+    <section class="view" data-view="flags">
+      <header class="topbar">
+        <h1>Drapeaux</h1>
+        <span class="chip-count" data-count></span>
+      </header>
+      <div class="filters" data-filter-group="flags">
+        <button class="pill active" data-filter="all">Tous</button>
+        <button class="pill" data-filter="visited">Débloqués</button>
+        <button class="pill" data-filter="todo">À découvrir</button>
+      </div>
+      <div class="scroll"><div id="flag-grid" class="flag-grid"></div></div>
+    </section>
+
+    <section class="view" data-view="list">
+      <header class="topbar">
+        <h1>Pays</h1>
+        <span class="chip-count" data-count></span>
+      </header>
+      <div class="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="search" type="search" placeholder="Rechercher un pays" autocomplete="off">
+      </div>
+      <div class="filters" data-filter-group="list">
+        <button class="pill active" data-filter="all">Tous</button>
+        <button class="pill" data-filter="visited">Visités</button>
+        <button class="pill" data-filter="todo">À découvrir</button>
+      </div>
+      <div class="scroll"><ul id="country-list" class="country-list"></ul></div>
+    </section>
+
+    <section class="view" data-view="settings">
+      <header class="topbar"><h1>Réglages</h1></header>
+      <div class="scroll settings">
+        <div class="brand">
+          <img src="img/logo.png" alt="">
+          <div><strong>Nomad</strong><span data-counter-text></span></div>
+        </div>
+
+        <h2>Couleur des pays visités</h2>
+        <div class="card">
+          <div id="swatches" class="swatches"></div>
+          <label class="row">
+            <span>Couleur personnalisée</span>
+            <input type="color" id="custom-color">
+          </label>
+        </div>
+
+        <h2>Apparence</h2>
+        <div class="card">
+          <div class="segmented" id="theme">
+            <button data-theme="auto">Auto</button>
+            <button data-theme="light">Clair</button>
+            <button data-theme="dark">Sombre</button>
+          </div>
+          <label class="row">
+            <span>Rotation automatique du globe</span>
+            <input type="checkbox" class="switch" id="autorotate">
+          </label>
+        </div>
+
+        <h2>Données</h2>
+        <div class="card">
+          <button class="row danger" id="reset">Réinitialiser les pays visités</button>
+        </div>
+        <p class="foot">Vos pays et photos restent sur cet appareil.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav id="tabbar">
+    <button class="tab active" data-tab="globe"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg><span>Globe</span></button>
+    <button class="tab" data-tab="map"><svg viewBox="0 0 24 24"><path d="m9 4-6 2v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg><span>Carte</span></button>
+    <button class="tab" data-tab="flags"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span>Drapeaux</span></button>
+    <button class="tab" data-tab="list"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Pays</span></button>
+    <button class="tab" data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Réglages</span></button>
+  </nav>
+
+  <div id="scrim"></div>
+  <section id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-name">
+    <div class="grab"><span></span></div>
+    <div class="sheet-head">
+      <img id="sheet-flag" alt="">
+      <div>
+        <h3 id="sheet-name"></h3>
+        <p id="sheet-sub"></p>
+      </div>
+      <button class="icon-btn" id="sheet-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <button id="visit-btn" class="visit-btn"></button>
+    <div class="album-head">
+      <h4>Album</h4>
+      <span id="album-count"></span>
+    </div>
+    <div id="album" class="album"></div>
+    <input type="file" id="file" accept="image/*" multiple hidden>
+  </section>
+
+  <div id="viewer" aria-hidden="true">
+    <div class="viewer-top">
+      <button class="icon-btn" id="viewer-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <span id="viewer-index"></span>
+      <button class="icon-btn" id="viewer-delete" aria-label="Supprimer la photo"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+    </div>
+    <div id="viewer-track"></div>
+  </div>
+
+  <div id="toast" role="status"></div>
+  <div id="confirm" aria-hidden="true">
+    <div class="confirm-box">
+      <p id="confirm-text"></p>
+      <div class="confirm-actions">
+        <button id="confirm-no">Annuler</button>
+        <button id="confirm-yes" class="danger">Confirmer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/d3.min.js"></script>
+<script src="vendor/topojson-client.min.js"></script>
+<script src="data/world.js"></script>
+<script src="data/countries.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
