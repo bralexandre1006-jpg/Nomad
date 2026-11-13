@@ -22,6 +22,8 @@ window.PhotoDB = (() => {
   return {
     add: p => tx('readwrite', s => s.put(p)),
     remove: id => tx('readwrite', s => s.delete(id)),
+    get: id => tx('readonly', s => s.get(id)),
+    keys: () => tx('readonly', s => s.getAllKeys()),
     byCountry: c => tx('readonly', s => s.index('country').getAll(c))
       .then(l => l.sort((a, b) => a.date - b.date)),
     counts: async () => {

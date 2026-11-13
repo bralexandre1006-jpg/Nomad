@@ -702,6 +702,102 @@
     toast('Pays visités réinitialisés');
   };
 
+  /* ---------- Export / import JSON ---------- */
+  const toDataURL = blob => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(blob);
+  });
+  const busy = (on, label) => {
+    ['#export', '#import'].forEach(s => { $(s).disabled = on; });
+    if (label) toast(label);
+  };
+
+  $('#export').onclick = async () => {
+    busy(true, 'Préparation de l\'export…');
+    try {
+      const stamp = new Date().toISOString().slice(0, 10);
+      const name = `nomad-${stamp}.json`;
+      const head = JSON.stringify({
+        app: 'nomad', format: 1, exportedAt: new Date().toISOString(),
+        settings: { color: state.color, theme: state.theme, autoRotate: state.autoRotate },
+        visited: state.visited
+      });
+      const FS = Plugins.Filesystem, Share = Plugins.Share;
+      const native = FS && Share && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      const parts = [];
+      const write = async (data, first) => {
+        if (!native) return parts.push(data);
+        const o = { path: name, data, directory: 'CACHE', encoding: 'utf8' };
+        await (first ? FS.writeFile(o) : FS.appendFile(o));
+      };
+      await write(head.slice(0, -1) + ',"photos":[', true);
+      const ids = await PhotoDB.keys();
+      for (let i = 0; i < ids.length; i++) {
+        const p = await PhotoDB.get(ids[i]);
+        if (!p) continue;
+        const item = { id: p.id, country: p.country, date: p.date, image: await toDataURL(p.blob), thumb: p.thumb ? await toDataURL(p.thumb) : null };
+        await write((i ? ',' : '') + JSON.stringify(item));
+      }
+      await write(']}');
+      if (native) {
+        const { uri } = await FS.getUri({ path: name, directory: 'CACHE' });
+        await Share.share({ title: 'Export Nomad', files: [uri], dialogTitle: 'Enregistrer l\'export Nomad' });
+      } else {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob(parts, { type: 'application/json' }));
+        a.download = name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      }
+      toast(`Export prêt · ${visitedCount()} pays, ${ids.length} photo${ids.length > 1 ? 's' : ''}`);
+    } catch (e) {
+      if (!/cancel/i.test(String(e && e.message))) toast('Échec de l\'export');
+    } finally { busy(false); }
+  };
+
+  $('#import').onclick = () => $('#import-file').click();
+  $('#import-file').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    let data;
+    try {
+      data = JSON.parse(await file.text());
+      if (!data || data.app !== 'nomad' || typeof data.visited !== 'object') throw 0;
+    } catch { return toast('Fichier invalide'); }
+    const codes = Object.keys(data.visited).filter(c => byCode.has(c));
+    const photos = Array.isArray(data.photos) ? data.photos.filter(p => p && p.image && byCode.has(p.country)) : [];
+    if (!await ask(`Importer ${codes.length} pays et ${photos.length} photo${photos.length > 1 ? 's' : ''} ? Ils s'ajoutent à vos données actuelles.`, 'Importer')) return;
+    busy(true, 'Import en cours…');
+    let ok = 0;
+    try {
+      codes.forEach(c => { if (!state.visited[c]) state.visited[c] = Number(data.visited[c]) || Date.now(); });
+      const s = data.settings || {};
+      if (/^#[0-9a-f]{6}$/i.test(s.color)) state.color = s.color;
+      if (['auto', 'light', 'dark'].includes(s.theme)) state.theme = s.theme;
+      if (typeof s.autoRotate === 'boolean') state.autoRotate = s.autoRotate;
+      save();
+      for (const p of photos) {
+        try {
+          const blob = await (await fetch(p.image)).blob();
+          const thumb = p.thumb ? await (await fetch(p.thumb)).blob() : await resize(blob, 480, 0.8);
+          await PhotoDB.add({ id: String(p.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`), country: p.country, blob, thumb, date: Number(p.date) || Date.now() });
+          ok++;
+        } catch {}
+      }
+      photoCounts = await PhotoDB.counts().catch(() => photoCounts);
+      applyTheme();
+      renderSettings();
+      renderCounters();
+      renderPhotoCounts();
+      COUNTRIES.forEach(c => updateVisitedUI(c.c));
+      toast(`Import terminé · ${codes.length} pays, ${ok} photo${ok > 1 ? 's' : ''}`);
+    } catch { toast('Échec de l\'import'); }
+    finally { busy(false); }
+  });
+
   /* ---------- Bouton retour Android ---------- */
   try {
     Plugins.App && Plugins.App.addListener('backButton', () => {

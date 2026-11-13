@@ -183,6 +183,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   width: 100%; padding: 14px 16px; min-height: 52px; text-align: left; border-top: 1px solid var(--line);
 }
 .card > .row:first-child { border-top: 0; }
+.row .hint { color: var(--muted); font-size: 13px; font-weight: 600; }
+.row:disabled { opacity: .5; }
 .row.danger, button.danger { color: #D2453E; font-weight: 600; }
 .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 16px; justify-items: center; }
 .swatch {
