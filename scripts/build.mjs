@@ -45,6 +45,66 @@ const list = SOVEREIGN.map(a2 => {
   return { c: a2, n: num, name, k: continentOf[a2] };
 }).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 
+// Régions d'outre-mer / îles séparées du pays principal : id world-atlas ou boîtes [lonMin, latMin, lonMax, latMax]
+const SUBS = [
+  ['FR-GF', 'FR', 'Guyane', { b: [[-55, 1.5, -51, 6.5]], f: 'gf' }],
+  ['FR-GP', 'FR', 'Guadeloupe', { b: [[-61.9, 15.8, -60.9, 16.6]], f: 'gp' }],
+  ['FR-MQ', 'FR', 'Martinique', { b: [[-61.3, 14.3, -60.7, 15]], f: 'mq' }],
+  ['FR-RE', 'FR', 'La Réunion', { b: [[55, -21.5, 56, -20.8]], f: 're' }],
+  ['FR-YT', 'FR', 'Mayotte', { b: [[44.9, -13.1, 45.4, -12.5]], f: 'yt' }],
+  ['FR-NC', 'FR', 'Nouvelle-Calédonie', { id: '540', f: 'nc' }],
+  ['FR-PF', 'FR', 'Polynésie française', { id: '258', f: 'pf' }],
+  ['FR-PM', 'FR', 'Saint-Pierre-et-Miquelon', { id: '666', f: 'pm' }],
+  ['FR-WF', 'FR', 'Wallis-et-Futuna', { id: '876', f: 'wf' }],
+  ['FR-MF', 'FR', 'Saint-Martin', { id: '663', f: 'mf' }],
+  ['FR-BL', 'FR', 'Saint-Barthélemy', { id: '652', f: 'bl' }],
+  ['FR-TF', 'FR', 'Terres australes françaises', { id: '260', f: 'tf' }],
+  ['ES-CN', 'ES', 'Îles Canaries', { b: [[-18.5, 27.4, -13.2, 29.6]], f: 'ic' }],
+  ['ES-IB', 'ES', 'Îles Baléares', { b: [[1, 38.5, 4.6, 40.2]] }],
+  ['PT-20', 'PT', 'Açores', { b: [[-31.5, 36.5, -24.5, 40]] }],
+  ['PT-30', 'PT', 'Madère', { b: [[-17.5, 32.3, -16, 33.3]] }],
+  ['US-AK', 'US', 'Alaska', { b: [[-180, 50, -129, 72], [170, 50, 180, 56]] }],
+  ['US-HI', 'US', 'Hawaï', { b: [[-161, 18.5, -154, 22.5]] }],
+  ['US-PR', 'US', 'Porto Rico', { id: '630', f: 'pr' }],
+  ['US-GU', 'US', 'Guam', { id: '316', f: 'gu' }],
+  ['US-VI', 'US', 'Îles Vierges des États-Unis', { id: '850', f: 'vi' }],
+  ['US-AS', 'US', 'Samoa américaines', { id: '016', f: 'as' }],
+  ['US-MP', 'US', 'Îles Mariannes du Nord', { id: '580', f: 'mp' }],
+  ['GB-BM', 'GB', 'Bermudes', { id: '060', f: 'bm' }],
+  ['GB-KY', 'GB', 'Îles Caïmans', { id: '136', f: 'ky' }],
+  ['GB-VG', 'GB', 'Îles Vierges britanniques', { id: '092', f: 'vg' }],
+  ['GB-TC', 'GB', 'Îles Turques-et-Caïques', { id: '796', f: 'tc' }],
+  ['GB-AI', 'GB', 'Anguilla', { id: '660', f: 'ai' }],
+  ['GB-MS', 'GB', 'Montserrat', { id: '500', f: 'ms' }],
+  ['GB-FK', 'GB', 'Îles Malouines', { id: '238', f: 'fk' }],
+  ['GB-JE', 'GB', 'Jersey', { id: '832', f: 'je' }],
+  ['GB-GG', 'GB', 'Guernesey', { id: '831', f: 'gg' }],
+  ['GB-IM', 'GB', 'Île de Man', { id: '833', f: 'im' }],
+  ['GB-SH', 'GB', 'Sainte-Hélène', { id: '654', f: 'sh' }],
+  ['GB-PN', 'GB', 'Îles Pitcairn', { id: '612', f: 'pn' }],
+  ['GB-GS', 'GB', 'Géorgie du Sud', { id: '239', f: 'gs' }],
+  ['GB-IO', 'GB', "Territoire britannique de l'océan Indien", { id: '086', f: 'io' }],
+  ['DK-GL', 'DK', 'Groenland', { id: '304', f: 'gl' }],
+  ['DK-FO', 'DK', 'Îles Féroé', { id: '234', f: 'fo' }],
+  ['NL-AW', 'NL', 'Aruba', { id: '533', f: 'aw' }],
+  ['NL-CW', 'NL', 'Curaçao', { id: '531', f: 'cw' }],
+  ['NL-SX', 'NL', 'Saint-Martin (Pays-Bas)', { id: '534', f: 'sx' }],
+  ['NL-BQ', 'NL', 'Pays-Bas caribéens', { b: [[-69, 11.9, -62.9, 18.2]], f: 'bq' }],
+  ['NO-SJ', 'NO', 'Svalbard', { b: [[10, 74, 35, 81]], f: 'sj' }],
+  ['EC-W', 'EC', 'Îles Galápagos', { b: [[-92.2, -1.6, -89, 0.8]] }],
+  ['CN-HK', 'CN', 'Hong Kong', { id: '344', f: 'hk' }],
+  ['CN-MO', 'CN', 'Macao', { id: '446', f: 'mo' }],
+  ['FI-AX', 'FI', 'Åland', { id: '248', f: 'ax' }],
+  ['NZ-CK', 'NZ', 'Îles Cook', { id: '184', f: 'ck' }],
+  ['NZ-NU', 'NZ', 'Niue', { id: '570', f: 'nu' }],
+  ['AU-NF', 'AU', 'Île Norfolk', { id: '574', f: 'nf' }]
+].map(([c, p, name, o]) => {
+  if (!SOVEREIGN.includes(p)) throw new Error('Parent inconnu: ' + c);
+  let f = o.f && fs.existsSync(nm(`flag-icons/flags/4x3/${o.f}.svg`)) ? o.f : null;
+  if (f) fs.copyFileSync(nm(`flag-icons/flags/4x3/${f}.svg`), path.join(www, `flags/${f}.svg`));
+  return { c, p, name, id: o.id, b: o.b, f: f || p.toLowerCase() };
+});
+
 const topo = JSON.parse(fs.readFileSync(nm('world-atlas/countries-50m.json'), 'utf8'));
 const ids = new Set(topo.objects.countries.geometries.map(g => g.id));
 const missing = list.filter(c => !ids.has(c.n)).map(c => c.c);
@@ -55,5 +115,5 @@ const topo110 = JSON.parse(fs.readFileSync(nm('world-atlas/countries-110m.json')
 fs.writeFileSync(path.join(www, 'data/world.js'), 'window.NOMAD_WORLD=' + JSON.stringify(topo) + ';window.NOMAD_WORLD110=' + JSON.stringify(topo110) + ';');
 fs.writeFileSync(path.join(www, 'data/continents.js'), 'window.NOMAD_CONTINENTS=' + JSON.stringify(Object.fromEntries(Object.entries(CONTINENTS).map(([k, [n]]) => [k, n]))) + ';');
 fs.copyFileSync(nm('@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2'), path.join(www, 'fonts/outfit.woff2'));
-fs.writeFileSync(path.join(www, 'data/countries.js'), 'window.NOMAD_COUNTRIES=' + JSON.stringify(list) + ';');
+fs.writeFileSync(path.join(www, 'data/countries.js'), 'window.NOMAD_COUNTRIES=' + JSON.stringify(list) + ';window.NOMAD_SUBS=' + JSON.stringify(SUBS) + ';');
 console.log(`OK: ${list.length} pays, sans géométrie: ${missing.join(' ') || 'aucun'}`);

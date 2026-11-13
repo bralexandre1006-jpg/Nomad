@@ -9,7 +9,11 @@
   const byNum = new Map(COUNTRIES.map(c => [c.n, c]));
   const PRESETS = ['#2EBD59', '#F6BF26', '#E8704F', '#2BA3A0', '#4C7BD9', '#8B6CD6', '#D9629A', '#D2453E'];
   const KEY = 'nomad.v1';
-  const flagSrc = c => `flags/${c.toLowerCase()}.svg`;
+  const SUBS = window.NOMAD_SUBS || [];
+  const SUBMAP = new Map(SUBS.map(s => [s.c, s]));
+  const info = c => byCode.get(c) || SUBMAP.get(c);
+  const known = c => !!info(c);
+  const flagSrc = c => `flags/${(SUBMAP.has(c) ? SUBMAP.get(c).f : c).toLowerCase()}.svg`;
   const CHECK = '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>';
   const Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
 
@@ -32,11 +36,23 @@
     const obj = topo.objects.countries;
     const codeOf = id => { const c = byNum.get(id === '376' ? '275' : id); return c ? c.c : null; };
     const byC = new Map();
+    const add = f => { if (!byC.has(f.code)) byC.set(f.code, []); byC.get(f.code).push(f); };
+    const subById = new Map(SUBS.filter(s => s.id).map(s => [s.id, s.c]));
+    const inBox = (pt, boxes) => boxes.some(b => pt[0] >= b[0] && pt[0] <= b[2] && pt[1] >= b[1] && pt[1] <= b[3]);
     topojson.feature(topo, obj).features.forEach(f => {
-      f.code = codeOf(f.id);
+      f.code = subById.get(f.id) || codeOf(f.id);
       if (!f.code) return;
-      if (!byC.has(f.code)) byC.set(f.code, []);
-      byC.get(f.code).push(f);
+      const boxed = SUBS.filter(s => s.p === f.code && s.b);
+      if (!boxed.length || f.geometry.type !== 'MultiPolygon') return add(f);
+      const groups = new Map();
+      f.geometry.coordinates.forEach(poly => {
+        const ctr = d3.geoCentroid({ type: 'Polygon', coordinates: poly });
+        const sub = boxed.find(s => inBox(ctr, s.b));
+        const k = sub ? sub.c : f.code;
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(poly);
+      });
+      groups.forEach((polys, k) => add({ type: 'Feature', id: f.id, code: k, properties: {}, geometry: { type: 'MultiPolygon', coordinates: polys } }));
     });
     const ip = (a, b) => (a.id === '376' && b.id === '275') || (a.id === '275' && b.id === '376');
     return {
@@ -61,12 +77,14 @@
     return best ? d3.geoCentroid(best) : null;
   };
   const GEO = new Map();
-  COUNTRIES.forEach(c => {
+  [...COUNTRIES, ...SUBS].forEach(c => {
     const feats = HI.byC.get(c.c) || [];
+    if (!feats.length && SUBMAP.has(c.c)) return;
     const area = feats.reduce((s, f) => s + d3.geoArea(f), 0);
     GEO.set(c.c, { feats, center: largestCenter(feats) || (c.c === 'TV' ? [179.2, -8.52] : [0, 0]), small: !feats.length || area < 2.2e-4 });
   });
-  const SMALL = COUNTRIES.map(c => c.c).filter(c => GEO.get(c).small);
+  const SMALL = [...GEO.keys()].filter(c => GEO.get(c).small);
+  const visitedGeo = () => Object.keys(state.visited).filter(c => GEO.has(c));
   const hitCountry = ll => {
     for (const [code, g] of GEO) if (g.feats.some(f => d3.geoContains(f, ll))) return code;
     return null;
@@ -126,13 +144,13 @@
   $('#confirm').onclick = e => e.target.id === 'confirm' && closeConfirm(false);
 
   function setVisited(code, on, year) {
-    const c = byCode.get(code);
+    const c = info(code);
     if (on) { state.visited[code] = Date.now(); if (year) state.years[code] = year; }
     else { delete state.visited[code]; delete state.years[code]; }
     save();
     renderCounters();
     updateVisitedUI(code);
-    if (on) toast(`${c.name} débloqué · ${visitedCount()}/${TOTAL}`);
+    if (on) toast(SUBMAP.has(code) ? `${c.name} ajouté` : `${c.name} débloqué · ${visitedCount()}/${TOTAL}`);
   }
 
   function updateVisitedUI(code) {
@@ -224,7 +242,7 @@
 
       ctx.beginPath(); path(G.land); ctx.fillStyle = colors.land; ctx.fill();
       ctx.beginPath();
-      visitedList().forEach(code => (G.byC.get(code) || []).forEach(f => path(f)));
+      visitedGeo().forEach(code => (G.byC.get(code) || []).forEach(f => path(f)));
       ctx.fillStyle = colors.accent; ctx.fill();
       ctx.beginPath(); path(G.borders); ctx.strokeStyle = colors.border; ctx.lineWidth = 0.6; ctx.lineJoin = 'round'; ctx.stroke();
 
@@ -444,7 +462,7 @@
       if (interactive) { ctx.fillStyle = colors.ocean; ctx.fill(P.sphere); }
       ctx.fillStyle = colors.land; ctx.fill(P.land);
       ctx.fillStyle = colors.accent;
-      visitedList().forEach(code => { const p = P.byC.get(code); if (p) ctx.fill(p); });
+      visitedGeo().forEach(code => { const p = P.byC.get(code); if (p) ctx.fill(p); });
       ctx.lineWidth = (interactive ? 0.6 : 0.4) / t.k; ctx.strokeStyle = colors.border; ctx.stroke(P.borders);
       const rv = (interactive ? 3 : 1.8) / Math.sqrt(t.k);
       SMALL.forEach(code => {
@@ -550,8 +568,10 @@
     if (listBuilt) return;
     listBuilt = true;
     const ul = $('#country-list');
-    ul.innerHTML = COUNTRIES.map(c =>
-      `<li data-row="${c.c}" data-q="${searchKey(c)}"><button class="open" data-open="${c.c}"><img src="${flagSrc(c.c)}" alt="" loading="lazy"><div><div class="nm">${c.name}</div><div class="ph" data-ph="${c.c}"></div></div></button><button class="check${isVisited(c.c) ? ' on' : ''}" data-toggle="${c.c}" aria-label="Visité">${CHECK}</button></li>`).join('')
+    const row = (c, q, sub) =>
+      `<li data-row="${c.c}" data-q="${q}"${sub ? ' class="sub"' : ''}><button class="open" data-open="${c.c}"><img src="${flagSrc(c.c)}" alt="" loading="lazy"><div><div class="nm">${c.name}</div><div class="ph" data-ph="${c.c}"></div></div></button><button class="check${isVisited(c.c) ? ' on' : ''}" data-toggle="${c.c}" aria-label="Visité">${CHECK}</button></li>`;
+    ul.innerHTML = COUNTRIES.map(c => row(c, searchKey(c), false)
+      + SUBS.filter(s => s.p === c.c && GEO.has(s.c)).map(s => row(s, norm(s.name + ' ' + c.name), true)).join('')).join('')
       + '<li class="empty" hidden>Aucun pays trouvé</li>';
     ul.addEventListener('click', e => {
       const t = e.target.closest('[data-toggle]');
@@ -601,13 +621,14 @@
   const sheetEl = $('#sheet');
 
   function renderSheetHead() {
-    const c = byCode.get(sheet.code);
+    const c = info(sheet.code);
     const v = isVisited(c.c);
     const n = sheet.photos.length;
     const y = state.years[c.c];
     $('#sheet-flag').src = flagSrc(c.c);
     $('#sheet-name').textContent = c.name;
-    $('#sheet-sub').textContent = v ? (y ? `Visité · première visite en ${y}` : 'Visité') : 'Pas encore visité';
+    const parent = SUBMAP.has(c.c) ? ` · ${byCode.get(c.p).name}` : '';
+    $('#sheet-sub').textContent = (v ? (y ? `Visité · première visite en ${y}` : 'Visité') : 'Pas encore visité') + parent;
     const btn = $('#visit-btn');
     btn.classList.toggle('on', v);
     btn.innerHTML = v ? `${CHECK}<span>Visité</span>` : '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Marquer comme visité</span>';
@@ -615,7 +636,7 @@
     $('#year-value').textContent = y || 'Ajouter';
     $('#album-count').textContent = n ? `${n} photo${n > 1 ? 's' : ''}` : '';
     $('#hl-label').textContent = n ? c.name : 'Vide';
-    $('#hl-open').classList.toggle('empty', !n);
+    $('#hl-open').classList.toggle('is-empty', !n);
   }
 
   const outlineCache = new Map();
@@ -663,7 +684,7 @@
 
   let yearResolve = null;
   function pickYear(code, current) {
-    const c = byCode.get(code);
+    const c = info(code);
     const now = new Date().getFullYear();
     $('#years-sub').textContent = `En quelle année as-tu visité ce pays pour la première fois ? (${c.name})`;
     $('#years-grid').innerHTML = d3.range(now, 1939, -1).map(y => `<button data-y="${y}"${y === current ? ' class="on"' : ''}>${y}</button>`).join('');
@@ -687,7 +708,7 @@
   };
 
   function openSheet(code) {
-    if (!byCode.has(code)) return;
+    if (!known(code)) return;
     sheet.code = code;
     sheet.photos = [];
     sheet.open = true;
@@ -788,7 +809,7 @@
     story.open = true;
     $('#story-bars').innerHTML = sheet.photos.map(() => '<i><b></b></i>').join('');
     $('#story-shape').innerHTML = shapeSVG(sheet.code);
-    $('#story-name').textContent = byCode.get(sheet.code).name;
+    $('#story-name').textContent = info(sheet.code).name;
     $('#viewer').classList.add('show');
     $('#viewer').setAttribute('aria-hidden', 'false');
     goStory(i);
@@ -974,14 +995,14 @@
       data = JSON.parse(await file.text());
       if (!data || data.app !== 'nomad' || typeof data.visited !== 'object') throw 0;
     } catch { return toast('Fichier invalide'); }
-    const codes = Object.keys(data.visited).filter(c => byCode.has(c));
-    const photos = Array.isArray(data.photos) ? data.photos.filter(p => p && p.image && byCode.has(p.country)) : [];
+    const codes = Object.keys(data.visited).filter(known);
+    const photos = Array.isArray(data.photos) ? data.photos.filter(p => p && p.image && known(p.country)) : [];
     if (!await ask(`Importer ${codes.length} pays et ${photos.length} photo${photos.length > 1 ? 's' : ''} ? Ils s'ajoutent à vos données actuelles.`, 'Importer')) return;
     busy(true, 'Import en cours…');
     let ok = 0;
     try {
       codes.forEach(c => { if (!state.visited[c]) state.visited[c] = Number(data.visited[c]) || Date.now(); });
-      Object.entries(data.years || {}).forEach(([c, y]) => { if (byCode.has(c) && !state.years[c] && Number(y) > 1900) state.years[c] = Number(y); });
+      Object.entries(data.years || {}).forEach(([c, y]) => { if (known(c) && !state.years[c] && Number(y) > 1900) state.years[c] = Number(y); });
       const s = data.settings || {};
       if (/^#[0-9a-f]{6}$/i.test(s.color)) state.color = s.color;
       if (['auto', 'light', 'dark'].includes(s.theme)) state.theme = s.theme;
@@ -1000,7 +1021,7 @@
       renderSettings();
       renderCounters();
       renderPhotoCounts();
-      COUNTRIES.forEach(c => updateVisitedUI(c.c));
+      [...COUNTRIES, ...SUBS].forEach(c => updateVisitedUI(c.c));
       toast(`Import terminé · ${codes.length} pays, ${ok} photo${ok > 1 ? 's' : ''}`);
     } catch { toast('Échec de l\'import'); }
     finally { busy(false); }
