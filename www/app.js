@@ -193,7 +193,7 @@
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       W = r.width; H = r.height;
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-      base = Math.min(W, H - 200) / 2 * 0.9;
+      base = Math.min(W, H - 200) / 2 * 0.78;
       g.dirty = true;
     };
     const cy = () => H / 2 + 6;
@@ -381,7 +381,7 @@
       const target = [-geo.center[0], clampLat(-geo.center[1])];
       const from = [rot[0], rot[1]];
       target[0] = from[0] + ((((target[0] - from[0]) % 360) + 540) % 360 - 180);
-      anim = { t0: performance.now(), dur: 900, interp: d3.interpolate(from, target), z0: zoom, z1: zoomIn ? Math.max(zoom, geo.small ? 3 : 1.6) : zoom };
+      anim = { t0: performance.now(), dur: 900, interp: d3.interpolate(from, target), z0: zoom, z1: zoomIn ? Math.max(zoom, geo.small ? 2.6 : 1.25) : zoom };
     };
     g.lookAt = (code, z) => {
       const geo = GEO.get(code);
@@ -999,10 +999,11 @@
       el.classList.add('show');
       document.body.classList.add('intro');
       size();
-      globe.lookAt(code, geo.small ? 3 : 1.4);
+      globe.lookAt(code, geo.small ? 2.2 : 1);
       const R = Math.min(W, H) * 0.24;
-      const target = [-geo.center[0], Math.max(-70, Math.min(70, -geo.center[1]))];
-      const from = [target[0] - 720, target[1] + 25];
+      const target = [-geo.center[0], 0];
+      const close = [target[0], Math.max(-70, Math.min(70, -geo.center[1]))];
+      const from = [target[0] - 720, 0];
       const spin = d3.interpolate(from, target);
       $('#intro-name').animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }],
         { duration: 900, delay: 500, easing: 'ease-out', fill: 'both' });
@@ -1015,7 +1016,7 @@
       const veil = $('#veil');
       $('#intro-name').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
       await run(1300, (e, k) => {
-        draw(target, R * (1 + 34 * e), 1, 1, true);
+        draw(d3.interpolate(target, close)(Math.min(1, e * 2.5)), R * (1 + 34 * e), 1, 1, true);
         veil.style.opacity = Math.max(0, (k - 0.45) / 0.55);
       }, d3.easeCubicIn);
       veil.style.opacity = 1;
