@@ -474,13 +474,17 @@
       }
     }
 
-    const fitZoom = (code, size) => {
+    const fitZoom = (code, w, h, target) => {
       const geo = GEO.get(code);
-      let a = 0.01;
-      const pts = [geo.center, ...(state.cities[code] || []).map(c => c.c)];
-      geo.feats.forEach(f => { const b = d3.geoBounds(f); pts.push(b[0], b[1], [b[0][0], b[1][1]], [b[1][0], b[0][1]]); });
-      pts.forEach(pt => { a = Math.max(a, d3.geoDistance(geo.center, pt)); });
-      return Math.max(1, Math.min(40, (size / 2) / (base * Math.sin(Math.min(a * 1.08, 1.4)))));
+      const pr = d3.geoOrthographic().clipAngle(90).rotate(target).scale(1).translate([0, 0]);
+      const pts = [];
+      geo.feats.forEach(f => { const b = d3.geoPath(pr).bounds(f); if (isFinite(b[0][0])) pts.push(b[0], b[1]); });
+      (state.cities[code] || []).forEach(c => { const q = pr(c.c); if (q) pts.push(q); });
+      if (!pts.length) return 6;
+      const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+      const bw = Math.max(0.002, Math.max(...xs) - Math.min(...xs)), bh = Math.max(0.002, Math.max(...ys) - Math.min(...ys));
+      const R = Math.min(w / bw, h / bh) * 0.86;
+      return Math.max(1, Math.min(60, R / base));
     };
     g.focus = (code, zoomIn, area) => {
       const geo = GEO.get(code);
@@ -492,7 +496,7 @@
       target[0] = from[0] + ((((target[0] - from[0]) % 360) + 540) % 360 - 180);
       let z1 = zoom, oy1 = offY;
       if (zoomIn && area) {
-        z1 = fitZoom(code, Math.min(W - 40, area.bottom - area.top - 30));
+        z1 = fitZoom(code, W - 32, area.bottom - area.top - 16, [target[0], target[1]]);
         oy1 = (area.top + area.bottom) / 2 - (H / 2 + 6);
       }
       anim = { t0: performance.now(), dur: 950, interp: d3.interpolate(from, target), z0: zoom, z1, oy0: offY, oy1 };

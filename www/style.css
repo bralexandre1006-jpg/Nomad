@@ -544,3 +544,19 @@ button, a, input { touch-action: manipulation; }
 
 #sheet .album-head.first { margin-top: 6px; }
 .sheet-full { margin-bottom: 4px; }
+
+/* fiche compacte */
+#sheet .sheet-head { padding: 2px 0 10px; gap: 12px; }
+#sheet #sheet-flag { width: 52px; height: 39px; border-radius: 8px; }
+#sheet #sheet-name { font-size: 21px; }
+#sheet #sheet-sub { font-size: 13px; }
+#sheet .album-head { margin: 12px 2px 8px; }
+#sheet .album-head h4 { font-size: 15px; letter-spacing: .2px; }
+#sheet .highlights { gap: 14px; padding-bottom: 2px; }
+#sheet .hl { width: 70px; gap: 5px; }
+#sheet .hl-ring { width: 64px; height: 64px; padding: 3px; }
+#sheet .hl small { font-size: 11px; }
+#sheet .chip > button { padding: 7px 4px 7px 11px; font-size: 13px; }
+#sheet .chip .x { padding: 7px 11px 7px 5px; }
+#sheet .chip.add { padding: 7px 12px; font-size: 13px; }
+#sheet .grab { padding: 8px 0 4px; }
