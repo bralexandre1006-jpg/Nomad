@@ -1521,6 +1521,7 @@
   const resume = () => { if (story.paused) { story.paused = false; story.t0 = performance.now(); if (story.video) sVid.play().catch(() => {}); } };
   function closeViewer() {
     story.open = false;
+    sheet.openedAt = performance.now();
     sVid.pause();
     $('#viewer').classList.remove('show');
     $('#viewer').setAttribute('aria-hidden', 'true');
