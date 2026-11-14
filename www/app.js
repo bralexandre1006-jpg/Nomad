@@ -1128,7 +1128,7 @@
     modal.classList.add('show');
     modal.setAttribute('aria-hidden', 'false');
   }
-  $('#photos-add').onclick = () => { hideModal(); $('#file').click(); };
+  $('#photos-add').onclick = () => { hideModal(); startImport(); };
   $('#photos-later').onclick = hideModal;
 
   $('#year-row').onclick = async () => {
@@ -1231,7 +1231,51 @@
     });
   })();
 
-  $('#add-photo').onclick = () => $('#file').click();
+  $('#add-photo').onclick = () => startImport();
+
+  /* Import natif (Android) : décodage HEIC/JPEG, redimensionnement et copie des vidéos côté natif */
+  async function startImport() {
+    const MI = Plugins.MediaImport;
+    if (!MI || !NATIVE_FS) return $('#file').click();
+    const code = sheet.code;
+    const ov = $('#importer');
+    const hs = [];
+    try {
+      hs.push(await MI.addListener('start', d => {
+        if (!d.total) return;
+        $('#imp-name').textContent = info(code).name;
+        $('#imp-bar').style.width = '0%';
+        $('#imp-count').textContent = `0 / ${d.total}`;
+        $('#imp-file').textContent = 'Préparation…';
+        $('#imp-cancel').disabled = false;
+        ov.classList.add('show');
+      }));
+      hs.push(await MI.addListener('progress', d => {
+        $('#imp-count').textContent = `${d.done} / ${d.total}`;
+        $('#imp-bar').style.width = `${(d.done / d.total) * 100}%`;
+        $('#imp-file').textContent = d.video ? 'Vidéo' : 'Photo';
+      }));
+    } catch {}
+    $('#imp-cancel').onclick = () => { $('#imp-cancel').disabled = true; MI.cancel().catch(() => {}); };
+    let res = { items: [], failed: 0 };
+    try { res = await MI.pick(); } catch (e) { console.error('import natif', e); }
+    hs.forEach(h => h && h.remove && h.remove());
+    let ok = 0;
+    for (const it of res.items || []) {
+      try {
+        await PhotoDB.add({ id: it.id, country: code, date: it.date || Date.now(), file: it.path, ...(it.type === 'video' ? { type: 'video', mime: it.mime } : {}) });
+        ok++;
+      } catch {}
+    }
+    ov.classList.remove('show');
+    photoCounts[code] = (photoCounts[code] || 0) + ok;
+    renderPhotoCounts();
+    if (ok && !isVisited(code)) setVisited(code, true);
+    if (sheet.code === code && sheet.open) loadAlbum();
+    const failed = (res.failed || 0) + ((res.items || []).length - ok);
+    if (failed) await ask(`${ok} souvenir${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}. ${failed} fichier${failed > 1 ? 's' : ''} n'${failed > 1 ? 'ont' : 'a'} pas pu être lu${failed > 1 ? 's' : ''}.`, 'OK', true);
+    else if (ok) toast(`${ok} souvenir${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}`);
+  }
 
   /* ---------- Galerie ---------- */
   const galleryOpen = () => $('#gallery').classList.contains('show');
@@ -1275,7 +1319,7 @@
   }
   $('#open-gallery').onclick = openGallery;
   $('#gal-close').onclick = closeGallery;
-  $('#gal-add').onclick = () => $('#file').click();
+  $('#gal-add').onclick = () => startImport();
   $('#gal-grid').addEventListener('click', e => { const b = e.target.closest('[data-gi]'); if (b) openViewer(+b.dataset.gi); });
   $('#album-clear').onclick = async () => {
     const code = sheet.code, list = sheet.photos.slice();
@@ -1288,7 +1332,7 @@
     await loadAlbum();
     toast(ok === list.length ? 'Album supprimé' : `${list.length - ok} souvenir(s) n'ont pas pu être supprimés`);
   };
-  $('#hl-open').onclick = () => (sheet.photos.length ? openViewer(0) : $('#file').click());
+  $('#hl-open').onclick = () => (sheet.photos.length ? openViewer(0) : startImport());
 
   let heicLib = null;
   const loadHeic = () => heicLib || (heicLib = new Promise((res, rej) => {
