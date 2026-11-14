@@ -1065,21 +1065,13 @@
   });
 
   /* ---------- Villes ---------- */
-  const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
   function renderCities() {
     const list = state.cities[sheet.code] || [];
     const n = list.length;
     $('#sheet-cities').textContent = n ? `${n} ville${n > 1 ? 's' : ''}` : '';
-    $('#city-cards').innerHTML = '<button class="ccard add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><b>Ajouter une ville</b></button>'
-      + list.map((c, i) => {
-        const d = c.d ? new Date(c.d) : null;
-        return `<div class="ccard${i === activeCity ? ' on' : ''}" data-ci="${i}">
-          <span class="ccard-i">${String(i + 1).padStart(2, '0')}</span>
-          <b>${esc(c.n)}</b>
-          <small>${d ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : 'Ville visitée'}</small>
-          <button class="ccard-x" data-del="${i}" aria-label="Retirer ${esc(c.n)}">×</button>
-        </div>`;
-      }).join('');
+    $('#city-cards').innerHTML = '<button class="chip add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Ajouter</button>'
+      + list.map((c, i) =>
+      `<span class="chip${i === activeCity ? ' on' : ''}" data-ci="${i}"><button><i></i>${esc(c.n)}</button><button class="x" data-del="${i}" aria-label="Retirer ${esc(c.n)}">×</button></span>`).join('');
   }
   function goCity(i, scroll) {
     const list = state.cities[sheet.code] || [];
@@ -1107,23 +1099,6 @@
     const b = e.target.closest('[data-ci]');
     if (b) goCity(+b.dataset.ci, true);
   });
-  (() => {
-    const row = $('#city-cards');
-    let tm;
-    row.addEventListener('scroll', () => {
-      clearTimeout(tm);
-      tm = setTimeout(() => {
-        const r = row.getBoundingClientRect(), mid = r.left + r.width / 2;
-        let best = -1, bd = 1e9;
-        $$('[data-ci]', row).forEach(el => {
-          const q = el.getBoundingClientRect(), d = Math.abs(q.left + q.width / 2 - mid);
-          if (d < bd) { bd = d; best = +el.dataset.ci; }
-        });
-        if (best >= 0 && best !== activeCity && row.scrollLeft > 20) goCity(best, false);
-      }, 140);
-    }, { passive: true });
-  })();
-
   const cityCache = {};
   async function loadCities(code) {
     const sub = SUBMAP.get(code);
