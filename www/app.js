@@ -943,6 +943,9 @@
   const finderOpen = () => $('#finder').classList.contains('show');
   function openFinder() {
     buildList();
+    $('#search').value = '';
+    applyListFilter();
+    $('#finder .scroll').scrollTop = 0;
     $('#finder').classList.add('show');
     $('#finder').setAttribute('aria-hidden', 'false');
     setTimeout(() => $('#search').focus(), 250);
