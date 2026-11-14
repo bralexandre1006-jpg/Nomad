@@ -504,6 +504,21 @@
       g.dirty = true;
       if (!geo || !g.active) return;
       const target = [-geo.center[0], clampLat(-geo.center[1])];
+      if (zoomIn && area) {
+        // centre sur le milieu de la forme visible (pas sur le centroïde) pour un cadrage équilibré
+        for (let it = 0; it < 2; it++) {
+          const pr = d3.geoOrthographic().clipAngle(90).rotate(target).scale(1).translate([0, 0]);
+          const pts = [];
+          geo.feats.forEach(f => { const b = d3.geoPath(pr).bounds(f); if (isFinite(b[0][0])) pts.push(b[0], b[1]); });
+          (state.cities[code] || []).forEach(c => { const q = pr(c.c); if (q) pts.push(q); });
+          if (!pts.length) break;
+          const mx = (Math.min(...pts.map(q => q[0])) + Math.max(...pts.map(q => q[0]))) / 2;
+          const my = (Math.min(...pts.map(q => q[1])) + Math.max(...pts.map(q => q[1]))) / 2;
+          const mid = pr.invert([mx, my]);
+          if (!mid || !isFinite(mid[0])) break;
+          target[0] = -mid[0]; target[1] = clampLat(-mid[1]);
+        }
+      }
       const from = [rot[0], rot[1]];
       target[0] = from[0] + ((((target[0] - from[0]) % 360) + 540) % 360 - 180);
       let z1 = zoom, oy1 = offY;
@@ -985,7 +1000,9 @@
     try { photos = await PhotoDB.byCountry(code); } catch {}
     if (code !== sheet.code) return;
     sheet.photos = photos;
+    const h0 = sheetEl.offsetHeight;
     renderSheetHead();
+    if (sheet.open && Math.abs(sheetEl.offsetHeight - h0) > 6) requestAnimationFrame(() => focusArea(code));
   }
 
   async function toggleVisit(code) {
@@ -1101,6 +1118,7 @@
     return { top: 78, bottom: Math.max(240, sheetTop - off - 8) };
   }
   function focusArea(code) {
+    if (!sheet.open || sheet.code !== code) return;
     const area = sheetArea();
     if (state.mode === 'globe') globe.focus(code, true, area);
     else plan.zoomTo(code, area);
