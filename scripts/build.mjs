@@ -145,6 +145,8 @@ fs.writeFileSync(path.join(www, 'data/continents.js'), 'window.NOMAD_CONTINENTS=
 fs.copyFileSync(nm('@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2'), path.join(www, 'fonts/outfit.woff2'));
 fs.writeFileSync(path.join(www, 'data/countries.js'), 'window.NOMAD_COUNTRIES=' + JSON.stringify(list) + ';window.NOMAD_SUBS=' + JSON.stringify(SUBS) + ';');
 // Villes (GeoNames, > 1000 habitants), un fichier par code pays
+// noms alternatifs (français, anglais…) des villes de plus de 30 000 habitants, extraits de GeoNames
+const ALTS = JSON.parse(fs.readFileSync(path.join(root, 'scripts/data/city-alts.json'), 'utf8'));
 const byCc = {};
 for (const c of require('all-the-cities')) {
   (byCc[c.country] ||= []).push(c);
@@ -152,7 +154,7 @@ for (const c of require('all-the-cities')) {
 let nCities = 0;
 for (const [cc, list] of Object.entries(byCc)) {
   list.sort((a, b) => b.population - a.population);
-  const out = list.map(c => [c.name, +c.loc.coordinates[0].toFixed(3), +c.loc.coordinates[1].toFixed(3)]);
+  const out = list.map(c => { const r = [c.name, +c.loc.coordinates[0].toFixed(3), +c.loc.coordinates[1].toFixed(3)]; const al = ALTS[c.cityId]; if (al) r.push(al); return r; });
   nCities += out.length;
   fs.writeFileSync(path.join(www, `data/cities/${cc}.json`), JSON.stringify(out));
 }

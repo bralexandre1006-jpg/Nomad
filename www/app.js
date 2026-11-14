@@ -1720,11 +1720,26 @@
   function renderCityResults() {
     const raw = $('#city-search').value.trim(), q = norm(raw);
     const have = new Set((state.cities[pickCode] || []).map(c => c.n));
-    let res = q ? pickList.filter(c => norm(c[0]).startsWith(q)) : pickList.slice(0, 40);
-    if (q && res.length < 40) res = res.concat(pickList.filter(c => !norm(c[0]).startsWith(q) && norm(c[0]).includes(q)));
-    res = res.slice(0, 60);
+    // recherche aussi dans les noms alternatifs (ex. « Cologne » trouve Köln)
+    const altHit = c => (c[3] || []).find(a => norm(a).startsWith(q));
+    const altIn = c => (c[3] || []).find(a => norm(a).includes(q));
+    let res;
+    if (!q) res = pickList.slice(0, 40).map(c => [c, null]);
+    else {
+      const a = [], b = [], d = [];
+      for (const c of pickList) {
+        const n = norm(c[0]);
+        if (n.startsWith(q)) { a.push([c, null]); if (a.length >= 60) break; continue; }
+        const al = altHit(c);
+        if (al) b.push([c, al]);
+        else if (n.includes(q)) d.push([c, null]);
+        else { const ai = altIn(c); if (ai) d.push([c, ai]); }
+      }
+      res = a.concat(b, d);
+    }
+    res = res.slice(0, 60).map(([c, alt]) => [c[0], c[1], c[2], alt]);
     $('#city-results').innerHTML = res.map((c, i) =>
-      `<li><button data-pick="${i}"${have.has(c[0]) ? ' class="on"' : ''}><span>${esc(c[0])}</span>${have.has(c[0]) ? CHECK : ''}</button></li>`).join('')
+      `<li><button data-pick="${i}"${have.has(c[0]) ? ' class="on"' : ''}><span>${esc(c[0])}${c[3] ? ` <em>${esc(c[3])}</em>` : ''}</span>${have.has(c[0]) ? CHECK : ''}</button></li>`).join('')
       + (raw ? `<li><button class="place" data-place="1"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Placer « ${esc(raw)} » sur la carte</span></button></li>` : '')
       + (!res.length && !raw ? '<li class="empty">Aucune ville en base pour ce lieu. Tape un nom pour la placer sur la carte.</li>' : '');
     $('#city-results').dataset.res = JSON.stringify(res.map(c => [c[0], c[1], c[2]]));
