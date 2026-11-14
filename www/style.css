@@ -533,3 +533,36 @@ button, a, input { touch-action: manipulation; }
 #placebar svg { width: 22px; height: 22px; stroke: var(--city); flex: none; }
 #placebar span { flex: 1; font-size: 14px; }
 #placebar button { padding: 8px 12px; border-radius: 12px; background: var(--surface-2); font-weight: 600; }
+
+/* ---------- Mode pays : fiche réduite + cartes de villes ---------- */
+#scrim.light { background: transparent; }
+#sheet.peek .sheet-full { display: none; }
+.sheet-more { display: none; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.sheet-more svg { width: 18px; height: 18px; }
+#sheet.peek .sheet-more { display: inline-flex; }
+.city-cards {
+  display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  margin: 0 -20px 4px; padding: 2px 20px 8px; overscroll-behavior-x: contain; scroll-padding: 0 20px;
+}
+.city-cards::-webkit-scrollbar { display: none; }
+.ccard {
+  flex: none; position: relative; width: 148px; min-height: 96px; scroll-snap-align: center;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 2px;
+  padding: 12px 14px; border-radius: 18px; background: var(--surface-2); text-align: left;
+  border: 1.5px solid transparent; transition: border-color .2s, transform .2s var(--ease), background .2s;
+}
+.ccard:active { transform: scale(.97); }
+.ccard.on { border-color: var(--city); background: color-mix(in srgb, var(--city) 12%, var(--surface-2)); }
+.ccard b { font-size: 16px; font-weight: 700; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ccard small { font-size: 12px; color: var(--muted); }
+.ccard-i {
+  position: absolute; top: 10px; left: 14px; font-size: 12px; font-weight: 700; color: var(--city);
+  font-variant-numeric: tabular-nums; letter-spacing: .5px;
+}
+.ccard-x { position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; color: var(--muted); font-size: 17px; line-height: 1; }
+.ccard.add {
+  align-items: center; justify-content: center; gap: 6px; background: none; color: var(--muted);
+  border: 1.5px dashed color-mix(in srgb, var(--ink) 22%, transparent);
+}
+.ccard.add svg { width: 22px; height: 22px; }
+.ccard.add b { font-size: 13px; font-weight: 600; white-space: normal; text-align: center; }

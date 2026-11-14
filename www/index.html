@@ -161,15 +161,13 @@
         <h3 id="sheet-name"></h3>
         <p id="sheet-sub"></p>
       </div>
+      <span class="sheet-more" aria-hidden="true"><span id="sheet-cities"></span><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></span>
       <button class="icon-btn" id="sheet-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
+    <div class="city-cards" id="city-cards"></div>
+    <div class="sheet-full">
     <button id="visit-btn" class="visit-btn"></button>
     <button class="year-row" id="year-row" hidden><span>Première visite</span><b id="year-value"></b></button>
-    <div class="album-head">
-      <h4>Villes</h4>
-      <span id="city-count"></span>
-    </div>
-    <div class="city-chips" id="city-chips"></div>
     <div class="album-head">
       <h4>Album</h4>
       <span id="album-count"></span>
@@ -177,6 +175,7 @@
     <div class="highlights">
       <button class="hl" id="hl-open"><span class="hl-ring"><svg id="hl-shape" viewBox="0 0 100 100"></svg></span><small id="hl-label"></small></button>
       <button class="hl" id="add-photo"><span class="hl-ring add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><small>Ajouter</small></button>
+    </div>
     </div>
     <input type="file" id="file" accept="image/*" multiple hidden>
   </section>

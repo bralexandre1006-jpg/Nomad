@@ -200,36 +200,62 @@
   $('#recenter').onclick = () => (state.mode === 'globe' ? globe.reset() : plan.reset());
 
   /* ---------- Villes : dessin ---------- */
-  function drawCities(ctx, project, r, labelsAll, selected, k = 1) {
-    const codes = Object.keys(state.cities);
+  let activeCity = -1;
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  // focus : code du pays sélectionné (mode pays) ou null (vue monde)
+  function drawCities(ctx, project, r, labelsAll, focus, k = 1) {
+    const codes = focus ? (state.cities[focus] ? [focus] : []) : Object.keys(state.cities);
     if (!codes.length) return;
-    const fs = 10 / k, pad = 2 / k;
-    const boxes = [];
     const pts = [];
-    codes.forEach(code => (state.cities[code] || []).forEach(city => {
+    codes.forEach(code => (state.cities[code] || []).forEach((city, i) => {
       const pt = project(city.c);
-      if (pt) pts.push([pt, city.n, labelsAll || code === selected]);
+      if (pt) pts.push({ pt, n: city.n, active: !!focus && i === activeCity });
     }));
     ctx.save();
-    pts.forEach(([pt]) => {
-      ctx.beginPath(); ctx.arc(pt[0], pt[1], r, 0, Math.PI * 2);
-      ctx.fillStyle = colors.city; ctx.fill();
-      ctx.lineWidth = 1 / k; ctx.strokeStyle = '#000'; ctx.stroke();
-    });
+    if (!focus) {
+      pts.forEach(({ pt }) => {
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], r, 0, Math.PI * 2);
+        ctx.fillStyle = colors.city; ctx.fill();
+        ctx.lineWidth = 1 / k; ctx.strokeStyle = '#000'; ctx.stroke();
+      });
+      if (!labelsAll) { ctx.restore(); return; }
+    } else {
+      pts.forEach(({ pt, active }) => {
+        const rr = (active ? 5.5 : 4) / k;
+        const halo = ctx.createRadialGradient(pt[0], pt[1], 0, pt[0], pt[1], rr * 3.4);
+        halo.addColorStop(0, colors.city + (active ? 'AA' : '66'));
+        halo.addColorStop(1, colors.city + '00');
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], rr * 3.4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(pt[0], pt[1], rr, 0, Math.PI * 2);
+        ctx.fillStyle = colors.city; ctx.fill();
+        ctx.lineWidth = 1.6 / k; ctx.strokeStyle = '#fff'; ctx.stroke();
+      });
+    }
+    const fs = 10.5 / k, px = 6 / k, py = 4 / k, gap = 9 / k;
     ctx.font = `600 ${fs}px Outfit, system-ui, sans-serif`;
-    ctx.textBaseline = 'middle';
-    pts.forEach(([pt, n, show]) => {
-      if (!show) return;
-      const w = ctx.measureText(n).width;
-      const x = pt[0] + r + 3 / k, y = pt[1];
-      const b = [x - pad, y - fs / 2 - pad, x + w + pad, y + fs / 2 + pad];
-      if (boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) return;
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+    const boxes = [];
+    pts.sort((a, b) => b.active - a.active).forEach(({ pt, n, active }) => {
+      const w = ctx.measureText(n).width + px * 2, h = fs + py * 2;
+      const x = pt[0] - w / 2, y = pt[1] - gap - h;
+      const b = [x, y, x + w, y + h];
+      if (!active && boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) return;
       boxes.push(b);
-      ctx.lineWidth = 2.5 / k; ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.strokeText(n, x, y);
-      ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillText(n, x, y);
+      ctx.fillStyle = active ? colors.city : 'rgba(18, 18, 18, .9)';
+      roundRect(ctx, x, y, w, h, h / 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(pt[0] - 4 / k, y + h); ctx.lineTo(pt[0] + 4 / k, y + h); ctx.lineTo(pt[0], y + h + 4 / k); ctx.closePath(); ctx.fill();
+      if (!active) { ctx.lineWidth = 1 / k; ctx.strokeStyle = 'rgba(255,255,255,.12)'; roundRect(ctx, x, y, w, h, h / 2); ctx.stroke(); }
+      ctx.fillStyle = active ? '#111' : '#fff';
+      ctx.fillText(n, pt[0], y + h / 2 + 0.5 / k);
     });
     ctx.restore();
   }
+  const focusFill = code => (isVisited(code) ? colors.accent : d3.interpolateRgb(colors.land, '#ffffff')(0.18));
 
   /* ---------- Globe ---------- */
   const globe = (() => {
@@ -238,7 +264,7 @@
     const proj = d3.geoOrthographic().clipAngle(90);
     const path = d3.geoPath(proj, ctx);
     const grat = d3.geoGraticule().step([20, 20])();
-    const g = { dirty: true, active: true, running: false, selected: null };
+    const g = { dirty: true, active: true, running: false, selected: null, dim: 0 };
     let W = 0, H = 0, dpr = 1, base = 1, zoom = 1;
     const rot = [-8, -38, 0];
     let vel = [0, 0], lastInteract = 0, anim = null, hiPending = false, offY = 0;
@@ -304,7 +330,18 @@
         } else { ctx.beginPath(); (G.byC.get(g.selected) || geo.feats).forEach(f => path(f)); ctx.stroke(); }
       }
 
-      drawCities(ctx, ll => (d3.geoDistance(ll, c) < Math.PI / 2 - 0.01 ? proj(ll) : null), Math.min(3.5, 2.2 + zoom * 0.1), zoom > 3.5, g.selected);
+      if (g.dim > 0.01 && g.selected && GEO.has(g.selected)) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.6 * g.dim})`;
+        ctx.beginPath(); ctx.arc(X, Y, R, 0, Math.PI * 2); ctx.fill();
+        const fs = G.byC.get(g.selected) || GEO.get(g.selected).feats;
+        ctx.globalAlpha = g.dim;
+        ctx.beginPath(); fs.forEach(f => path(f)); ctx.fillStyle = focusFill(g.selected); ctx.fill();
+        ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      const vis = ll => (d3.geoDistance(ll, c) < Math.PI / 2 - 0.01 ? proj(ll) : null);
+      if (g.dim > 0.5 && g.selected) drawCities(ctx, vis, 0, true, g.selected);
+      else drawCities(ctx, vis, Math.min(3.5, 2.2 + zoom * 0.1), zoom > 3.5, null);
 
       const shade = ctx.createRadialGradient(X - R * 0.3, Y - R * 0.35, R * 0.15, X, Y, R);
       shade.addColorStop(0, 'rgba(255, 255, 255, .07)');
@@ -341,6 +378,9 @@
         rot[0] += 0.006 * dt;
         g.dirty = motion = true;
       }
+      const dimT = g.selected && sheet.open ? 1 : 0;
+      if (Math.abs(g.dim - dimT) > 0.01) { g.dim += (dimT - g.dim) * Math.min(1, dt / 140); g.dirty = true; motion = true; }
+      else g.dim = dimT;
       if (motion) {
         if (g.dirty) { draw(true); hiPending = true; }
       } else if (g.dirty || hiPending) {
@@ -467,6 +507,7 @@
       anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: Math.min(zoom, 1), oy0: offY, oy1: 0 };
     };
     g.top = () => canvas.getBoundingClientRect().top;
+    g.zoom = () => zoom;
     g.lookAt = (code, z) => {
       const geo = GEO.get(code);
       if (!geo) return;
@@ -537,12 +578,20 @@
         ctx.beginPath(); ctx.arc(x, y, v ? rv : rv * 0.65, 0, Math.PI * 2);
         ctx.fillStyle = v ? colors.accent : colors.land; ctx.fill();
       });
-      if (interactive) drawCities(ctx, ll => proj(ll), 2.4 / t.k, t.k > 4, m.selected, t.k);
+      if (interactive && m.selected && P.byC.get(m.selected)) {
+        ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = 'rgba(0, 0, 0, .6)'; ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+        ctx.fillStyle = focusFill(m.selected); ctx.fill(P.byC.get(m.selected));
+        ctx.lineWidth = 1.4 / t.k; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.stroke(P.byC.get(m.selected));
+      }
+      if (interactive && m.selected) drawCities(ctx, ll => proj(ll), 0, true, m.selected, t.k);
+      else if (interactive) drawCities(ctx, ll => proj(ll), 2.4 / t.k, t.k > 4, null, t.k);
       else drawCities(ctx, ll => proj(ll), 1.6, false, null);
       if (m.selected) {
         ctx.lineWidth = 2 / t.k; ctx.strokeStyle = colors.brand;
         const p = P.byC.get(m.selected);
-        if (p && !GEO.get(m.selected).small) ctx.stroke(p);
+        if (p && !GEO.get(m.selected).small) { /* contour déjà dessiné en mode pays */ }
         else { const [x, y] = P.pts.get(m.selected); ctx.beginPath(); ctx.arc(x, y, 8 / t.k, 0, Math.PI * 2); ctx.stroke(); }
       }
     }
@@ -562,6 +611,13 @@
       d3.select(canvas).transition().duration(800).call(zoomer.transform, tr);
     };
     m.top = () => canvas.getBoundingClientRect().top;
+    m.panTo = ll => {
+      if (!zoomer) return;
+      const k = Math.max(t.k, 6), [x, y] = proj(ll);
+      const area = sheetArea();
+      const tr = d3.zoomIdentity.translate(W / 2 - k * x, (area.top + area.bottom) / 2 - k * y).scale(k);
+      d3.select(canvas).transition().duration(700).call(zoomer.transform, tr);
+    };
     m.reset = () => zoomer && d3.select(canvas).transition().duration(600).call(zoomer.transform, home);
     m.invalidate = () => { m.ready = false; key = ''; };
     if (interactive) {
@@ -764,6 +820,7 @@
     const y = await pickYear(code);
     if (y === undefined) return;
     setVisited(code, true, y);
+    if (sheet.open && sheet.code === code) setPeek(false);
     if (!sheet.open || sheet.code !== code) {
       if (finderOpen()) closeFinder();
       if (current !== 'map') show('map');
@@ -848,6 +905,9 @@
     $('#hl-shape').innerHTML = shapeSVG(code);
     renderSheetHead();
     sheetEl.style.transform = '';
+    activeCity = -1;
+    $('#city-cards').scrollLeft = 0;
+    setPeek(isVisited(code) || (state.cities[code] || []).length > 0);
     sheetEl.classList.add('show');
     $('#scrim').classList.add('show');
     plan.select(code);
@@ -855,12 +915,24 @@
     loadAlbum();
     requestAnimationFrame(() => focusArea(code));
   }
-  function focusArea(code) {
+  function setPeek(on) {
+    sheetEl.classList.toggle('peek', on);
+    $('#scrim').classList.toggle('light', on);
+  }
+  function sheetArea() {
     const sheetTop = window.innerHeight - sheetEl.offsetHeight;
     const off = state.mode === 'globe' ? globe.top() : plan.top();
-    const area = { top: 78, bottom: Math.max(240, sheetTop - off - 8) };
+    return { top: 78, bottom: Math.max(240, sheetTop - off - 8) };
+  }
+  function focusArea(code) {
+    const area = sheetArea();
     if (state.mode === 'globe') globe.focus(code, true, area);
     else plan.zoomTo(code, area);
+  }
+  function toggleFull(full) {
+    if (!sheet.open) return;
+    setPeek(!full);
+    requestAnimationFrame(() => focusArea(sheet.code));
   }
   function closeSheet() {
     if (!sheet.open) return;
@@ -882,12 +954,17 @@
 
   (() => {
     let y0 = null, dy = 0;
-    const start = e => { if (e.target.closest('button')) return; y0 = e.clientY; dy = 0; sheetEl.classList.add('dragging'); e.currentTarget.setPointerCapture(e.pointerId); };
-    const move = e => { if (y0 === null) return; dy = Math.max(0, e.clientY - y0); sheetEl.style.transform = `translateY(${dy}px)`; };
+    let raw = 0;
+    const start = e => { if (e.target.closest('button')) return; y0 = e.clientY; dy = 0; raw = 0; sheetEl.classList.add('dragging'); e.currentTarget.setPointerCapture(e.pointerId); };
+    const move = e => { if (y0 === null) return; raw = e.clientY - y0; dy = Math.max(0, raw); sheetEl.style.transform = `translateY(${dy}px)`; };
     const end = () => {
       if (y0 === null) return;
       y0 = null; sheetEl.classList.remove('dragging');
-      if (dy > 110) closeSheet(); else sheetEl.style.transform = '';
+      sheetEl.style.transform = '';
+      const peek = sheetEl.classList.contains('peek');
+      if (Math.abs(raw) < 6) return toggleFull(peek);
+      if (raw < -40 && peek) return toggleFull(true);
+      if (dy > 90) return peek ? closeSheet() : toggleFull(false);
     };
     $$('.grab, .sheet-head').forEach(el => {
       el.addEventListener('pointerdown', start);
@@ -988,14 +1065,33 @@
   });
 
   /* ---------- Villes ---------- */
+  const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
   function renderCities() {
     const list = state.cities[sheet.code] || [];
-    $('#city-count').textContent = list.length ? `${list.length} ville${list.length > 1 ? 's' : ''}` : '';
-    $('#city-chips').innerHTML = '<button class="chip add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Ajouter</button>'
-      + list.map((c, i) =>
-      `<span class="chip"><button data-ci="${i}"><i></i>${esc(c.n)}</button><button class="x" data-del="${i}" aria-label="Retirer ${esc(c.n)}">×</button></span>`).join('');
+    const n = list.length;
+    $('#sheet-cities').textContent = n ? `${n} ville${n > 1 ? 's' : ''}` : '';
+    $('#city-cards').innerHTML = '<button class="ccard add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><b>Ajouter une ville</b></button>'
+      + list.map((c, i) => {
+        const d = c.d ? new Date(c.d) : null;
+        return `<div class="ccard${i === activeCity ? ' on' : ''}" data-ci="${i}">
+          <span class="ccard-i">${String(i + 1).padStart(2, '0')}</span>
+          <b>${esc(c.n)}</b>
+          <small>${d ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : 'Ville visitée'}</small>
+          <button class="ccard-x" data-del="${i}" aria-label="Retirer ${esc(c.n)}">×</button>
+        </div>`;
+      }).join('');
   }
-  $('#city-chips').addEventListener('click', async e => {
+  function goCity(i, scroll) {
+    const list = state.cities[sheet.code] || [];
+    if (!list[i]) return;
+    activeCity = i;
+    $$('#city-cards [data-ci]').forEach(el => el.classList.toggle('on', +el.dataset.ci === i));
+    if (scroll) $(`#city-cards [data-ci="${i}"]`).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    if (state.mode === 'globe') globe.flyTo(list[i].c, Math.max(4, globe.zoom ? globe.zoom() : 4));
+    else plan.panTo(list[i].c);
+    globe.dirty = true; plan.redraw();
+  }
+  $('#city-cards').addEventListener('click', async e => {
     const code = sheet.code, list = state.cities[code] || [];
     if (e.target.closest('#city-add')) return openCityPick(code);
     const d = e.target.closest('[data-del]');
@@ -1004,14 +1100,29 @@
       if (!await ask(`Retirer ${c.n} de tes villes ?`, 'Retirer')) return;
       list.splice(+d.dataset.del, 1);
       if (!list.length) delete state.cities[code];
+      activeCity = -1;
       save(); renderCities(); globe.dirty = true; plan.redraw(); mini.redraw();
       return;
     }
     const b = e.target.closest('[data-ci]');
-    if (b && list[+b.dataset.ci]) {
-      if (state.mode === 'globe') globe.flyTo(list[+b.dataset.ci].c, 6);
-    }
+    if (b) goCity(+b.dataset.ci, true);
   });
+  (() => {
+    const row = $('#city-cards');
+    let tm;
+    row.addEventListener('scroll', () => {
+      clearTimeout(tm);
+      tm = setTimeout(() => {
+        const r = row.getBoundingClientRect(), mid = r.left + r.width / 2;
+        let best = -1, bd = 1e9;
+        $$('[data-ci]', row).forEach(el => {
+          const q = el.getBoundingClientRect(), d = Math.abs(q.left + q.width / 2 - mid);
+          if (d < bd) { bd = d; best = +el.dataset.ci; }
+        });
+        if (best >= 0 && best !== activeCity && row.scrollLeft > 20) goCity(best, false);
+      }, 140);
+    }, { passive: true });
+  })();
 
   const cityCache = {};
   async function loadCities(code) {
@@ -1059,7 +1170,7 @@
   function addCity(code, n, ll) {
     const list = state.cities[code] || (state.cities[code] = []);
     if (list.some(c => c.n === n)) return toast(`${n} est déjà dans tes villes`);
-    list.push({ n, c: [+ll[0].toFixed(4), +ll[1].toFixed(4)] });
+    list.push({ n, c: [+ll[0].toFixed(4), +ll[1].toFixed(4)], d: Date.now() });
     if (!isVisited(code)) state.visited[code] = Date.now();
     save();
     renderCounters();
@@ -1075,7 +1186,7 @@
       if (!c) return;
       addCity(pickCode, c[0], [c[1], c[2]]);
       closeCityPick();
-      if (sheet.open && sheet.code === pickCode) requestAnimationFrame(() => focusArea(pickCode));
+      if (sheet.open && sheet.code === pickCode) { setPeek(true); requestAnimationFrame(() => { focusArea(pickCode); goCity((state.cities[pickCode] || []).length - 1, true); }); }
       return;
     }
     if (e.target.closest('[data-place]')) startPlacing(pickCode, $('#city-search').value.trim());
