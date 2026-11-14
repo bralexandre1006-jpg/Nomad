@@ -1185,7 +1185,7 @@
       if (!galleryOpen() || sheet.photos !== list) return;
       galUrls.push(u);
       el.innerHTML = p.type === 'video'
-        ? `<video src="${u}#t=0.1" muted playsinline preload="metadata"></video><i></i>`
+        ? `<video src="${u}#t=0.1" muted playsinline preload="metadata" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video><i></i>`
         : `<img src="${u}" alt="" loading="lazy" decoding="async">`;
     }
   }
@@ -1490,6 +1490,8 @@
       if (!u || token !== story.token) return;
       if (isVid) {
         sImg.removeAttribute('src');
+        sVid.classList.add('wait');
+        sVid.onplaying = sVid.onloadeddata = () => sVid.classList.remove('wait');
         sVid.src = u;
         sVid.onloadedmetadata = () => { story.ready = true; };
         sVid.muted = false;

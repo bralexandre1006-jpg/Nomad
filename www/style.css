@@ -724,3 +724,6 @@ button, a, input { touch-action: manipulation; }
 }
 .gal-item:active { opacity: .7; }
 @keyframes fade { from { opacity: 0; } }
+
+#story-video.wait { opacity: 0; }
+#story-video { transition: opacity .15s; }
