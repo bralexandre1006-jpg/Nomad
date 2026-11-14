@@ -208,11 +208,12 @@
       </div>
     </div>
     <button class="sheet-expand" id="sheet-expand"><span>Plus d'options</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
-    <input type="file" id="file" accept="image/*" multiple hidden>
+    <input type="file" id="file" accept="image/*,video/*" multiple hidden>
   </section>
 
   <div id="viewer" aria-hidden="true">
     <img id="story-img" alt="">
+    <video id="story-video" playsinline preload="auto" hidden></video>
     <div class="story-shade"></div>
     <div class="story-head">
       <div class="story-bars" id="story-bars"></div>

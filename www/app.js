@@ -946,7 +946,8 @@
     btn.innerHTML = v ? `${CHECK}<span>Visité</span>` : '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Marquer comme visité</span>';
     $('#year-row').hidden = !v;
     $('#year-value').textContent = y || 'Ajouter';
-    $('#album-count').textContent = n ? `${n} photo${n > 1 ? 's' : ''}` : '';
+    const nv = sheet.photos.filter(x => x.type === 'video').length, np = n - nv;
+    $('#album-count').textContent = [np ? `${np} photo${np > 1 ? 's' : ''}` : '', nv ? `${nv} vidéo${nv > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
     $('#hl-label').textContent = n ? c.name : 'Vide';
     $('#hl-open').classList.toggle('is-empty', !n);
   }
@@ -1191,6 +1192,21 @@
     } else rec.blob = blob;
     await PhotoDB.add(rec);
   }
+  async function storeVideo(code, file, date) {
+    const id = newId();
+    const ext = (file.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4';
+    const rec = { id, country: code, date: date || Date.now(), type: 'video', mime: file.type || 'video/mp4' };
+    if (NATIVE_FS) {
+      rec.file = `photos/${id}.${ext}`;
+      const CH = 3 * 1024 * 1024;
+      for (let o = 0; o < file.size; o += CH) {
+        const data = await blobToB64(file.slice(o, Math.min(file.size, o + CH)));
+        const opt = { path: rec.file, data, directory: 'DATA', recursive: true };
+        await (o === 0 ? FSP.writeFile(opt) : FSP.appendFile(opt));
+      }
+    } else rec.blob = file;
+    await PhotoDB.add(rec);
+  }
   async function photoSrc(p) {
     if (p.file) { const { uri } = await FSP.getUri({ path: p.file, directory: 'DATA' }); return window.Capacitor.convertFileSrc(uri); }
     return URL.createObjectURL(p.blob);
@@ -1230,10 +1246,14 @@
     let ok = 0;
     for (const f of files) {
       try {
-        const src = await decode(f);
-        const blob = await encode(src, 2048, 0.85);
-        if (src.close) src.close();
-        await storePhoto(code, blob);
+        const when = f.lastModified && f.lastModified < Date.now() + 864e5 ? f.lastModified : Date.now();
+        if ((f.type || '').startsWith('video/')) await storeVideo(code, f, when);
+        else {
+          const src = await decode(f);
+          const blob = await encode(src, 2048, 0.85);
+          if (src.close) src.close();
+          await storePhoto(code, blob, when);
+        }
         ok++;
         $('#hl-label').textContent = `${ok}/${files.length}`;
       } catch (err) { console.error('photo', err); }
@@ -1243,7 +1263,7 @@
     renderPhotoCounts();
     if (ok < files.length) toast(`${files.length - ok} photo(s) n'ont pas pu être ajoutées`);
     if (ok && !isVisited(code)) setVisited(code, true);
-    else if (ok) toast(`${ok} photo${ok > 1 ? 's' : ''} ajoutée${ok > 1 ? 's' : ''}`);
+    else if (ok) toast(`${ok} souvenir${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}`);
     if (sheet.code === code && sheet.open) loadAlbum();
   });
 
@@ -1381,6 +1401,7 @@
   const DUR = 5000;
   const story = { open: false, i: 0, urls: {}, t0: 0, elapsed: 0, paused: true, ready: false };
   const sImg = $('#story-img');
+  const sVid = $('#story-video');
   function openViewer(i) {
     story.open = true;
     $('#story-bars').innerHTML = sheet.photos.map(() => '<i><b></b></i>').join('');
@@ -1403,10 +1424,24 @@
     story.i = Math.max(0, i);
     story.elapsed = 0; story.paused = false; story.ready = false;
     const p = sheet.photos[story.i];
+    const isVid = p.type === 'video';
+    story.video = isVid;
+    sVid.pause();
+    sVid.hidden = !isVid; sImg.hidden = isVid;
     sImg.onload = () => { story.ready = true; story.t0 = performance.now(); };
     const token = story.token = (story.token || 0) + 1;
-    urlFor(story.i).then(u => { if (u && token === story.token) sImg.src = u; }).catch(() => {});
-    urlFor(story.i + 1).then(u => { if (u) new Image().src = u; }).catch(() => {});
+    urlFor(story.i).then(u => {
+      if (!u || token !== story.token) return;
+      if (isVid) {
+        sImg.removeAttribute('src');
+        sVid.src = u;
+        sVid.onloadedmetadata = () => { story.ready = true; };
+        sVid.muted = false;
+        sVid.play().catch(() => { sVid.muted = true; sVid.play().catch(() => {}); });
+      } else { sVid.removeAttribute('src'); sImg.src = u; }
+    }).catch(() => {});
+    const nx = sheet.photos[story.i + 1];
+    if (nx && nx.type !== 'video') urlFor(story.i + 1).then(u => { if (u) new Image().src = u; }).catch(() => {});
     $('#story-date').textContent = new Date(p.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     $$('#story-bars b').forEach((b, k) => { b.style.width = k < story.i ? '100%' : '0%'; });
   }
@@ -1416,23 +1451,26 @@
   }
   function storyLoop() {
     if (!story.open) return;
-    const k = Math.min(1, progress() / DUR);
+    const k = story.video
+      ? (story.ready && sVid.duration ? Math.min(1, sVid.currentTime / sVid.duration) : 0) + (sVid.ended ? 1 : 0)
+      : Math.min(1, progress() / DUR);
     const bar = $$('#story-bars b')[story.i];
     if (bar) bar.style.width = k * 100 + '%';
     if (k >= 1) goStory(story.i + 1);
     requestAnimationFrame(storyLoop);
   }
-  const pause = () => { if (!story.paused) { story.elapsed = progress(); story.paused = true; } };
-  const resume = () => { if (story.paused) { story.paused = false; story.t0 = performance.now(); } };
+  const pause = () => { if (!story.paused) { story.elapsed = progress(); story.paused = true; if (story.video) sVid.pause(); } };
+  const resume = () => { if (story.paused) { story.paused = false; story.t0 = performance.now(); if (story.video) sVid.play().catch(() => {}); } };
   function closeViewer() {
     story.open = false;
+    sVid.pause();
     $('#viewer').classList.remove('show');
     $('#viewer').setAttribute('aria-hidden', 'true');
     $('#viewer').style.transform = '';
     setTimeout(() => {
       if (story.open) return;
       Object.values(story.urls).forEach(u => u.startsWith('blob:') && URL.revokeObjectURL(u));
-      story.urls = {}; sImg.removeAttribute('src');
+      story.urls = {}; sImg.removeAttribute('src'); sVid.removeAttribute('src'); sVid.load();
     }, 300);
   }
   $('#viewer-close').onclick = closeViewer;
@@ -1564,11 +1602,13 @@
       };
       await write(head.slice(0, -1) + ',"photos":[', true);
       const ids = await PhotoDB.keys();
+      let skippedVideos = 0, wrote = 0;
       for (let i = 0; i < ids.length; i++) {
         const p = await PhotoDB.get(ids[i]);
         if (!p) continue;
+        if (p.type === 'video') { skippedVideos++; continue; }
         const item = { id: p.id, country: p.country, date: p.date, image: await photoDataURL(p) };
-        await write((i ? ',' : '') + JSON.stringify(item));
+        await write((wrote++ ? ',' : '') + JSON.stringify(item));
       }
       await write(']}');
       if (native) {
@@ -1581,7 +1621,7 @@
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       }
-      toast(`Export prêt · ${visitedCount()} pays, ${ids.length} photo${ids.length > 1 ? 's' : ''}`);
+      toast(`Export prêt · ${visitedCount()} pays, ${wrote} photo${wrote > 1 ? 's' : ''}${skippedVideos ? ` (vidéos non incluses)` : ''}`);
     } catch (e) {
       if (!/cancel/i.test(String(e && e.message))) toast('Échec de l\'export');
     } finally { busy(false); }
