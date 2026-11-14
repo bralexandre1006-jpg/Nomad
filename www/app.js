@@ -361,7 +361,14 @@
       ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255, 255, 255, .14)'; ctx.stroke();
     }
 
-    let prev = 0;
+    let prev = 0, fade = null;
+    const bufs = [];
+    const buf = i => {
+      const b = bufs[i] || (bufs[i] = document.createElement('canvas'));
+      if (b.width !== canvas.width || b.height !== canvas.height) { b.width = canvas.width; b.height = canvas.height; }
+      else b.getContext('2d').clearRect(0, 0, b.width, b.height);
+      return b;
+    };
     function frame(t) {
       if (!g.active || document.hidden) { g.running = false; return; }
       const dt = prev ? Math.min(t - prev, 50) : 16;
@@ -391,9 +398,26 @@
       if (Math.abs(g.dim - dimT) > 0.01) { g.dim += (dimT - g.dim) * Math.min(1, dt / 140); g.dirty = true; motion = true; }
       else g.dim = dimT;
       if (motion) {
+        fade = null;
         if (g.dirty) { draw(true); hiPending = true; }
+      } else if (hiPending && !g.dirty) {
+        // fondu doux entre la version allégée (en mouvement) et la version détaillée
+        const lo = buf(0), hi = buf(1);
+        lo.getContext('2d').drawImage(canvas, 0, 0);
+        draw(false);
+        hi.getContext('2d').drawImage(canvas, 0, 0);
+        fade = { t0: t, lo, hi };
+        hiPending = false;
       } else if (g.dirty || hiPending) {
+        fade = null;
         draw(false); hiPending = false;
+      } else if (fade) {
+        const k = Math.min(1, (t - fade.t0) / 260);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(fade.hi, 0, 0);
+        if (k < 1) { ctx.globalAlpha = 1 - d3.easeCubicOut(k); ctx.drawImage(fade.lo, 0, 0); ctx.globalAlpha = 1; }
+        else fade = null;
       }
       g.dirty = false;
       requestAnimationFrame(frame);

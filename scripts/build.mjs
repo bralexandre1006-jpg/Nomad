@@ -130,7 +130,11 @@ const missing = list.filter(c => !ids.has(c.n)).map(c => c.c);
 
 const extra = Object.keys(continentOf).filter(c => !SOVEREIGN.includes(c));
 if (extra.length) throw new Error('Continent pour pays inconnu: ' + extra);
-const topo110 = JSON.parse(fs.readFileSync(nm('world-atlas/countries-110m.json'), 'utf8'));
+// version allégée du 50m (mêmes pays et îles, moins de points) pour le globe en mouvement
+const simp = require('topojson-simplify');
+const topoMid = simp.presimplify(JSON.parse(fs.readFileSync(nm('world-atlas/countries-50m.json'), 'utf8')));
+const topo110 = simp.simplify(topoMid, simp.quantile(topoMid, 0.12));
+topo110.arcs = topo110.arcs.map(arc => arc.map(([x, y]) => [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000]));
 fs.writeFileSync(path.join(www, 'data/world.js'), 'window.NOMAD_WORLD=' + JSON.stringify(topo) + ';window.NOMAD_WORLD110=' + JSON.stringify(topo110) + ';');
 fs.writeFileSync(path.join(www, 'data/continents.js'), 'window.NOMAD_CONTINENTS=' + JSON.stringify(Object.fromEntries(Object.entries(CONTINENTS).map(([k, [n]]) => [k, n]))) + ';');
 fs.copyFileSync(nm('@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2'), path.join(www, 'fonts/outfit.woff2'));
