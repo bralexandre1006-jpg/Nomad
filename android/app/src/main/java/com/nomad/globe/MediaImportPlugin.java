@@ -114,10 +114,18 @@ public class MediaImportPlugin extends Plugin {
                     it.put("mime", mime);
                     it.put("path", "photos/" + out.getName());
                     it.put("date", videoDate(u));
+                    try {
+                        File th = new File(dir, id + "_t.jpg");
+                        long dur = videoThumb(out, th);
+                        it.put("thumb", "photos/" + th.getName());
+                        if (dur > 0) it.put("dur", dur);
+                    } catch (Throwable ignored) {}
                 } else {
                     File out = new File(dir, id + ".jpg");
-                    writeImage(cr, u, out);
+                    File th = new File(dir, id + "_t.jpg");
+                    writeImage(cr, u, out, th);
                     it.put("path", "photos/" + out.getName());
+                    if (th.exists()) it.put("thumb", "photos/" + th.getName());
                     it.put("date", imageDate(cr, u));
                 }
                 items.put(it);
@@ -147,7 +155,31 @@ public class MediaImportPlugin extends Plugin {
         }
     }
 
-    private void writeImage(ContentResolver cr, Uri u, File out) throws Exception {
+    private static void saveThumb(Bitmap src, File th) {
+        try {
+            float sc = Math.min(1f, 360f / Math.min(src.getWidth(), src.getHeight()));
+            Bitmap t = sc < 1f ? Bitmap.createScaledBitmap(src, Math.max(1, Math.round(src.getWidth() * sc)), Math.max(1, Math.round(src.getHeight() * sc)), true) : src;
+            try (OutputStream os = new FileOutputStream(th)) { t.compress(Bitmap.CompressFormat.JPEG, 74, os); }
+            if (t != src) t.recycle();
+        } catch (Throwable ignored) {}
+    }
+
+    private long videoThumb(File video, File th) {
+        MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+        try {
+            mmr.setDataSource(video.getAbsolutePath());
+            String d = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+            Bitmap frame = mmr.getFrameAtTime(400000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+            if (frame != null) { saveThumb(frame, th); frame.recycle(); }
+            return d != null ? Long.parseLong(d) : 0;
+        } catch (Throwable e) {
+            return 0;
+        } finally {
+            try { mmr.release(); } catch (Throwable ignored) {}
+        }
+    }
+
+    private void writeImage(ContentResolver cr, Uri u, File out, File th) throws Exception {
         Bitmap bmp;
         if (Build.VERSION.SDK_INT >= 28) {
             ImageDecoder.Source src = ImageDecoder.createSource(cr, u);
@@ -176,6 +208,7 @@ public class MediaImportPlugin extends Plugin {
         }
         try (OutputStream os = new FileOutputStream(out)) {
             if (!bmp.compress(Bitmap.CompressFormat.JPEG, 86, os)) throw new Exception("compression impossible");
+            saveThumb(bmp, th);
         } finally {
             bmp.recycle();
         }

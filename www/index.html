@@ -214,25 +214,31 @@
 
   <section id="pviewer" aria-hidden="true">
     <div class="pv-top">
-      <button class="pv-btn" id="pv-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+      <button class="pv-back" id="pv-close" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
       <div class="pv-title"><b id="pv-date"></b><small id="pv-time"></small></div>
-      <span class="pv-count" id="pv-count"></span>
+      <span class="pv-back"></span>
     </div>
     <div id="pv-track"></div>
     <div class="pv-bottom">
-      <button class="pv-btn" id="pv-share" aria-label="Partager"><svg viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></button>
-      <button class="pv-btn" id="pv-story" aria-label="Lire en story"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5z"/></svg></button>
-      <button class="pv-btn" id="pv-delete" aria-label="Supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+      <div id="pv-strip"></div>
+      <div class="pv-tools">
+        <button id="pv-share" aria-label="Partager"><svg viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M6 10H5v10h14V10h-1"/></svg></button>
+        <button id="pv-fav" aria-label="Favori"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9.2-9A5 5 0 0 1 12 6a5 5 0 0 1 9.2 5C19 15.6 12 20 12 20z"/></svg></button>
+        <button id="pv-story" aria-label="Lire en story"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5z"/></svg></button>
+        <button id="pv-delete" aria-label="Supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+      </div>
     </div>
   </section>
 
   <section id="gallery" aria-hidden="true">
     <div class="gal-top">
-      <button class="icon-btn" id="gal-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
-      <div class="gal-title"><b id="gal-name"></b><small id="gal-count"></small></div>
-      <button class="icon-btn" id="gal-add" aria-label="Ajouter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="pv-back" id="gal-close" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
+      <button class="gal-add" id="gal-add">Ajouter</button>
     </div>
-    <div class="scroll" id="gal-scroll"><div id="gal-grid"></div></div>
+    <div class="scroll" id="gal-scroll">
+      <div class="gal-head"><h2 id="gal-name"></h2><small id="gal-count"></small></div>
+      <div id="gal-grid"></div>
+    </div>
   </section>
 
   <div id="viewer" aria-hidden="true">

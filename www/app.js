@@ -1290,7 +1290,7 @@
     let ok = 0;
     for (const it of res.items || []) {
       try {
-        await PhotoDB.add({ id: it.id, country: code, date: it.date || Date.now(), file: it.path, ...(it.type === 'video' ? { type: 'video', mime: it.mime } : {}) });
+        await PhotoDB.add({ id: it.id, country: code, date: it.date || Date.now(), file: it.path, ...(it.thumb ? { thumbFile: it.thumb } : {}), ...(it.dur ? { dur: it.dur / 1000 } : {}), ...(it.type === 'video' ? { type: 'video', mime: it.mime } : {}) });
         ok++;
       } catch {}
     }
@@ -1306,32 +1306,98 @@
 
   /* ---------- Galerie ---------- */
   const galleryOpen = () => $('#gallery').classList.contains('show');
-  const galUrls = [];
   const MONTHS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const fmtDur = sec => { sec = Math.round(sec || 0); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; };
+  const thumbQueue = [];
+  let thumbBusy = false;
+  function makeThumb(src, video) {
+    return new Promise(res => {
+      const done = (el, dur) => {
+        try {
+          const w = el.videoWidth || el.naturalWidth, h = el.videoHeight || el.naturalHeight;
+          if (!w || !h) return res(null);
+          const sc = 360 / Math.min(w, h);
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(w * Math.min(1, sc)); cv.height = Math.round(h * Math.min(1, sc));
+          cv.getContext('2d').drawImage(el, 0, 0, cv.width, cv.height);
+          const data = cv.toDataURL('image/jpeg', 0.72);
+          cv.width = cv.height = 0;
+          res({ data, dur });
+        } catch { res(null); }
+      };
+      if (video) {
+        const v = document.createElement('video');
+        v.muted = true; v.playsInline = true; v.preload = 'auto';
+        const t = setTimeout(() => { v.removeAttribute('src'); v.load(); res(null); }, 12000);
+        v.onloadeddata = () => { v.currentTime = Math.min(0.4, (v.duration || 1) / 3); };
+        v.onseeked = () => { clearTimeout(t); done(v, v.duration); v.removeAttribute('src'); v.load(); };
+        v.onerror = () => { clearTimeout(t); res(null); };
+        v.src = src;
+      } else {
+        const i = new Image();
+        i.onload = () => done(i);
+        i.onerror = () => res(null);
+        i.src = src;
+      }
+    });
+  }
+  async function thumbSrc(p) {
+    if (p.thumbData) return p.thumbData;
+    if (p.thumbFile && NATIVE_FS) {
+      const { uri } = await FSP.getUri({ path: p.thumbFile, directory: 'DATA' });
+      return window.Capacitor.convertFileSrc(uri);
+    }
+    return null;
+  }
+  function queueThumb(p, cb) {
+    thumbQueue.push([p, cb]);
+    if (!thumbBusy) pumpThumbs();
+  }
+  async function pumpThumbs() {
+    thumbBusy = true;
+    while (thumbQueue.length) {
+      const [p, cb] = thumbQueue.shift();
+      if (p.thumbData) { cb(p.thumbData); continue; }
+      let src;
+      try { src = await photoSrc(p); } catch { continue; }
+      const r = await makeThumb(src, p.type === 'video');
+      if (src.startsWith('blob:')) URL.revokeObjectURL(src);
+      if (r) {
+        p.thumbData = r.data;
+        if (r.dur) p.dur = r.dur;
+        PhotoDB.add(p).catch(() => {});
+        cb(r.data);
+      }
+    }
+    thumbBusy = false;
+  }
+  async function fillThumb(el, p) {
+    const put = u => {
+      el.insertAdjacentHTML('afterbegin', `<img src="${u}" alt="" decoding="async">`);
+      const b = el.querySelector('.dur');
+      if (b && p.dur) b.textContent = fmtDur(p.dur);
+    };
+    const u = await thumbSrc(p).catch(() => null);
+    if (u) put(u); else queueThumb(p, put);
+  }
   async function renderGallery() {
     const list = sheet.photos;
     $('#gal-name').textContent = info(sheet.code).name;
     $('#gal-count').textContent = $('#album-count').textContent;
-    galUrls.splice(0).forEach(u => u.startsWith('blob:') && URL.revokeObjectURL(u));
     let html = '', last = '';
     list.forEach((p, i) => {
       const d = new Date(p.date), key = `${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`;
-      if (key !== last) { if (last) html += '</div>'; html += `<h4 class="gal-month">${key}</h4><div class="gal-grid">`; last = key; }
-      html += `<button class="gal-item${p.type === 'video' ? ' video' : ''}" data-gi="${i}"></button>`;
+      if (key !== last) {
+        if (last) html += '</div>';
+        const n = list.filter(q => { const e = new Date(q.date); return e.getMonth() === d.getMonth() && e.getFullYear() === d.getFullYear(); }).length;
+        html += `<div class="gal-month"><b>${key.charAt(0).toUpperCase() + key.slice(1)}</b><small>${n} élément${n > 1 ? 's' : ''}</small></div><div class="gal-grid">`;
+        last = key;
+      }
+      html += `<button class="gal-item${p.type === 'video' ? ' video' : ''}" data-gi="${i}">${p.type === 'video' ? `<span class="dur">${p.dur ? fmtDur(p.dur) : ''}</span>` : ''}${p.fav ? '<span class="fav">♥</span>' : ''}</button>`;
     });
     if (last) html += '</div>';
     $('#gal-grid').innerHTML = html || '<p class="empty">Album vide</p>';
-    for (let i = 0; i < list.length; i++) {
-      const p = list[i], el = $(`#gal-grid [data-gi="${i}"]`);
-      if (!el) continue;
-      let u;
-      try { u = await photoSrc(p); } catch { continue; }
-      if (!galleryOpen() || sheet.photos !== list) return;
-      galUrls.push(u);
-      el.innerHTML = p.type === 'video'
-        ? `<video src="${u}#t=0.1" muted playsinline preload="metadata" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video><i></i>`
-        : `<img src="${u}" alt="" loading="lazy" decoding="async">`;
-    }
+    list.forEach((p, i) => { const el = $(`#gal-grid [data-gi="${i}"]`); if (el) fillThumb(el, p); });
   }
   function openGallery() {
     $('#gallery').classList.add('show');
@@ -1342,7 +1408,7 @@
   function closeGallery() {
     $('#gallery').classList.remove('show');
     $('#gallery').setAttribute('aria-hidden', 'true');
-    setTimeout(() => { if (!galleryOpen()) { $('#gal-grid').innerHTML = ''; galUrls.splice(0).forEach(u => u.startsWith('blob:') && URL.revokeObjectURL(u)); } }, 300);
+    setTimeout(() => { if (!galleryOpen()) $('#gal-grid').innerHTML = ''; }, 300);
   }
   $('#open-gallery').onclick = openGallery;
   $('#gal-close').onclick = closeGallery;
@@ -1365,6 +1431,7 @@
   }
   function closePhoto() {
     pv.open = false;
+    stripFor = null;
     sheet.openedAt = performance.now();
     pvEl.classList.remove('show');
     pvEl.setAttribute('aria-hidden', 'true');
@@ -1383,8 +1450,9 @@
     d.dataset.k = k;
     if (!p) return d;
     const u = await pvUrl(p).catch(() => '');
+    const poster = p.thumbData || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
     d.innerHTML = p.type === 'video'
-      ? `<video src="${u}" controls playsinline preload="metadata" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>`
+      ? `<video src="${u}" controls playsinline preload="auto" poster="${poster}"></video>`
       : `<img src="${u}" alt="" draggable="false">`;
     return d;
   }
@@ -1404,9 +1472,37 @@
     const d = new Date(p.date);
     $('#pv-date').textContent = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     $('#pv-time').textContent = `${info(sheet.code).name} · ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-    $('#pv-count').textContent = `${pv.i + 1} / ${n}`;
+    $('#pv-fav').classList.toggle('on', !!p.fav);
+    const v = curMedia();
+    if (v && v.tagName === 'VIDEO') { v.muted = false; v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); }
+    pvStrip();
   }
   const curMedia = () => pvTrack.children[1] && pvTrack.children[1].firstElementChild;
+  let stripFor = null;
+  function pvStrip() {
+    const st = $('#pv-strip');
+    if (stripFor !== sheet.photos) {
+      stripFor = sheet.photos;
+      st.innerHTML = sheet.photos.map((p, k) => `<button data-sk="${k}"></button>`).join('');
+      sheet.photos.forEach((p, k) => {
+        const el = st.children[k];
+        thumbSrc(p).then(u => { if (u) el.style.backgroundImage = `url("${u}")`; else queueThumb(p, x => { el.style.backgroundImage = `url("${x}")`; }); }).catch(() => {});
+      });
+    }
+    $$('button', st).forEach((b, k) => b.classList.toggle('on', k === pv.i));
+    const cur = st.children[pv.i];
+    if (cur) st.scrollTo({ left: cur.offsetLeft - st.clientWidth / 2 + cur.offsetWidth / 2, behavior: 'smooth' });
+  }
+  $('#pv-strip').addEventListener('click', e => { const b = e.target.closest('[data-sk]'); if (b) pvGo(+b.dataset.sk); });
+  $('#pv-fav').onclick = async () => {
+    const p = sheet.photos[pv.i];
+    if (!p) return;
+    p.fav = !p.fav;
+    $('#pv-fav').classList.toggle('on', p.fav);
+    if (navigator.vibrate) navigator.vibrate(8);
+    await PhotoDB.add(p).catch(() => {});
+    if (galleryOpen()) { const el = $(`#gal-grid [data-gi="${pv.i}"]`); if (el) { const f = el.querySelector('.fav'); if (p.fav && !f) el.insertAdjacentHTML('beforeend', '<span class="fav">♥</span>'); if (!p.fav && f) f.remove(); } }
+  };
   function pvApply(anim) {
     const m = curMedia();
     if (!m || m.tagName !== 'IMG') return;
@@ -1505,7 +1601,9 @@
       } else if (navigator.share && p.blob) {
         await navigator.share({ files: [new File([p.blob], p.type === 'video' ? 'video.mp4' : 'photo.jpg', { type: p.blob.type })] });
       } else toast('Partage indisponible');
-    } catch (e) { if (!/cancel|abort/i.test(String(e && (e.message || e.name)))) toast('Partage impossible'); }
+    } catch (e) {
+      if (!(p.file && Plugins.Share) && !/cancel|abort/i.test(String(e && (e.message || e.name)))) toast('Partage impossible');
+    }
   };
   $('#pv-delete').onclick = async () => {
     const p = sheet.photos[pv.i];
@@ -1606,6 +1704,7 @@
   async function deletePhoto(p) {
     await PhotoDB.remove(p.id);
     if (p.file) { try { await FSP.deleteFile({ path: p.file, directory: 'DATA' }); } catch {} }
+    if (p.thumbFile) { try { await FSP.deleteFile({ path: p.thumbFile, directory: 'DATA' }); } catch {} }
   }
   async function migratePhotos() {
     const legacy = { 'ES-CN': 'ES', 'ES-IB': 'ES', 'PT-20': 'PT' };
