@@ -559,7 +559,7 @@
       anim = { t0: performance.now(), dur: 800, interp: d3.interpolate(from, target), z0: zoom, z1: Math.max(zoom, z), oy0: offY, oy1: offY };
     };
     g.unfocus = () => {
-      anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: Math.min(zoom, 1), oy0: offY, oy1: 0 };
+      anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: Math.min(zoom, Math.max(1.3, zoom * 0.55)), oy0: offY, oy1: 0 };
     };
     g.top = () => canvas.getBoundingClientRect().top;
     g.zoom = () => zoom;
