@@ -1419,7 +1419,20 @@
   $('#open-gallery').onclick = openGallery;
   $('#gal-close').onclick = closeGallery;
   $('#gal-add').onclick = () => startImport();
-  $('#gal-grid').addEventListener('click', e => { const b = e.target.closest('[data-gi]'); if (b) openPhoto(+b.dataset.gi); });
+  // ouverture au relâchement du doigt (plus fiable qu'un « click » juste après avoir fermé une photo)
+  (() => {
+    const grid = $('#gal-grid');
+    let down = null;
+    grid.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target.closest('[data-gi]') }; });
+    grid.addEventListener('pointerup', e => {
+      const d = down; down = null;
+      if (!d || !d.el || pv.open) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10 || performance.now() - d.t > 600) return;
+      e.preventDefault();
+      openPhoto(+d.el.dataset.gi);
+    });
+    grid.addEventListener('pointercancel', () => { down = null; });
+  })();
 
   /* ---------- Visionneuse façon pellicule (zoom, glisser, partager) ---------- */
   const pv = { open: false, i: 0, urls: {}, scale: 1, tx: 0, ty: 0 };
@@ -1431,6 +1444,8 @@
   }
   function openPhoto(i) {
     pv.open = true;
+    pvEl.style.display = '';
+    pvEl.classList.remove('chrome-off');
     pvEl.classList.add('show');
     pvEl.setAttribute('aria-hidden', 'false');
     pvGo(i, false);
@@ -1444,6 +1459,7 @@
     $$('video', pvTrack).forEach(v => v.pause());
     setTimeout(() => {
       if (pv.open) return;
+      pvEl.style.display = 'none';
       pvTrack.innerHTML = '';
       Object.values(pv.urls).forEach(u => u.startsWith('blob:') && URL.revokeObjectURL(u));
       pv.urls = {};
