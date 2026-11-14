@@ -917,14 +917,19 @@
     if (flagsBuilt) return;
     flagsBuilt = true;
     const grid = $('#flag-grid');
-    grid.innerHTML = COUNTRIES.map(c =>
-      `<button class="flag${isVisited(c.c) ? ' visited' : ''}" data-c="${c.c}"><img src="${flagSrc(c.c)}" alt="" loading="lazy" decoding="async"><span>${c.name}</span></button>`).join('');
+    const tile = c => `<button class="flag${isVisited(c.c) ? ' visited' : ''}" data-c="${c.c}"><img src="${flagSrc(c.c)}" alt="" loading="lazy" decoding="async"><span>${esc(c.name)}</span></button>`;
+    // régions et îles qui ont leur propre drapeau (Sicile, Canaries, Groenland…)
+    const regs = SUBS.filter(sb => GEO.has(sb.c) && sb.f !== sb.p.toLowerCase());
+    grid.innerHTML = COUNTRIES.map(tile).join('')
+      + '<h4 class="flag-sec" id="flag-sec">Régions et îles</h4>' + regs.map(tile).join('');
     grid.addEventListener('click', e => { const b = e.target.closest('[data-c]'); b && openSheet(b.dataset.c); });
     applyFlagFilter();
   }
   function applyFlagFilter() {
     if (!flagsBuilt) return;
     $$('#flag-grid .flag').forEach(el => { el.hidden = !passes(el.dataset.c, filters.flags); });
+    const sec = $('#flag-sec');
+    if (sec) sec.hidden = !$$('#flag-grid .flag').some(el => SUBMAP.has(el.dataset.c) && !el.hidden);
   }
 
   /* ---------- Recherche ---------- */

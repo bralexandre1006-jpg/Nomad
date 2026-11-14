@@ -791,3 +791,5 @@ button, a, input { touch-action: manipulation; }
 .pv-btn svg { width: 22px; height: 22px; }
 
 .city-results button em { font-style: normal; color: var(--muted); font-size: 14px; margin-left: 6px; }
+
+.flag-sec { grid-column: 1 / -1; margin: 18px 4px 2px; font-size: 12px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); }
