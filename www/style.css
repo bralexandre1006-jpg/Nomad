@@ -645,7 +645,7 @@ button, a, input { touch-action: manipulation; }
 .wish-btn { color: var(--muted); }
 .wish-btn svg { transition: transform .25s var(--ease), fill .2s; }
 .wish-btn.on { color: var(--wish); }
-.wish-btn.on svg { fill: color-mix(in srgb, var(--wish) 35%, transparent); transform: rotate(-12deg) scale(1.08); }
+.wish-btn.on svg { fill: var(--wish); transform: scale(1.08); }
 .wish-btn:active svg { transform: scale(.8); }
 #sheet .wish-btn { align-self: flex-start; }
 .badge.wish { background: color-mix(in srgb, var(--wish) 20%, transparent); color: var(--wish); }
@@ -743,3 +743,5 @@ button, a, input { touch-action: manipulation; }
 .imp-track i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s var(--ease); }
 #imp-cancel { align-self: flex-end; padding: 8px 14px; border-radius: 10px; background: var(--surface-2); font-weight: 600; }
 #imp-cancel:disabled { opacity: .5; }
+
+.wish-btn svg { stroke-width: 1.5; }
