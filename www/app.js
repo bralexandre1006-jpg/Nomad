@@ -687,8 +687,132 @@
     $('#st-photos').textContent = photos;
     $('#st-albums').textContent = `${albums} album${albums > 1 ? 's' : ''}`;
     renderWish();
+    renderStats();
     mini.redraw();
   }
+
+  /* ---------- Statistiques ---------- */
+  const areaCache = new Map();
+  const areaOf = code => {
+    if (!areaCache.has(code)) areaCache.set(code, (GEO.get(code)?.feats || []).reduce((a, f) => a + d3.geoArea(f), 0));
+    return areaCache.get(code);
+  };
+  let worldArea = 0;
+  function renderStats() {
+    if (!worldArea) GEO.forEach((g, code) => { worldArea += areaOf(code); });
+    const codes = Object.keys(state.visited).filter(c => GEO.has(c));
+    const area = codes.reduce((a, c) => a + areaOf(c), 0) / worldArea * 100;
+    $('#st-area').textContent = (area < 10 ? area.toFixed(1) : Math.round(area)) + ' %';
+    const nc = Object.values(state.cities).reduce((a, l) => a + l.length, 0);
+    const ncc = Object.keys(state.cities).filter(c => state.cities[c].length).length;
+    $('#st-cities').textContent = nc;
+    $('#st-cities-sub').textContent = `dans ${ncc} pays`;
+    const home = state.home && GEO.get(state.home);
+    let far = null, fd = 0;
+    if (home) codes.forEach(c => { if (c === state.home) return; const d = d3.geoDistance(home.center, GEO.get(c).center); if (d > fd) { fd = d; far = c; } });
+    $('#st-far').textContent = far ? info(far).name : '—';
+    $('#st-far-km').textContent = far ? `${Math.round(fd * 6371).toLocaleString('fr-FR')} km de ${info(state.home).name}` : 'Marque un pays loin de chez toi';
+    const per = {};
+    Object.entries(state.years).forEach(([c, y]) => { if (state.visited[c] && byCode.has(c)) per[y] = (per[y] || 0) + 1; });
+    const ys = Object.keys(per).map(Number).sort((a, b) => a - b);
+    $('#years-total').textContent = ys.length ? `${ys.reduce((a, y) => a + per[y], 0)} pays datés` : '';
+    if (!ys.length) { $('#year-bars').innerHTML = '<p class="sec-empty">Ajoute l\'année de première visite sur la fiche d\'un pays.</p>'; return; }
+    const range = d3.range(Math.max(ys[0], ys[ys.length - 1] - 11), ys[ys.length - 1] + 1);
+    const max = Math.max(...range.map(y => per[y] || 0));
+    $('#year-bars').innerHTML = range.map(y => `<div class="yb"><b>${per[y] || ''}</b><i style="height:${((per[y] || 0) / max) * 100}%"></i><span>'${String(y).slice(2)}</span></div>`).join('');
+  }
+
+  /* ---------- Carte à partager ---------- */
+  const loadImg = src => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  async function makeShareCard() {
+    const W = 1080, H = 1920;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    const list = visitedList(), n = list.length, pct = Math.round(n / TOTAL * 100);
+    const font = (w, px) => `${w} ${px}px Outfit, system-ui, sans-serif`;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    for (let k = 0; k < 160; k++) {
+      ctx.globalAlpha = 0.15 + Math.random() * 0.55;
+      ctx.beginPath(); ctx.arc(Math.random() * W, Math.random() * H, 0.6 + Math.random() * 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#8A8A8A'; ctx.font = font(600, 30);
+    ctx.fillText('M O N   P A S S E P O R T', W / 2, 150);
+    ctx.fillStyle = '#fff'; ctx.font = font(700, 280);
+    const nw = ctx.measureText(String(n)).width;
+    ctx.font = font(400, 96);
+    const tw = ctx.measureText(` / ${TOTAL}`).width;
+    const x0 = W / 2 - (nw + tw) / 2;
+    ctx.textAlign = 'left';
+    ctx.font = font(700, 280); ctx.fillText(String(n), x0, 430);
+    ctx.fillStyle = '#7A7A7A'; ctx.font = font(400, 96); ctx.fillText(` / ${TOTAL}`, x0 + nw, 430);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#BDBDBD'; ctx.font = font(500, 40);
+    ctx.fillText(`pays visités · ${pct} % des pays du monde`, W / 2, 500);
+    ctx.fillStyle = '#1E1E1E'; ctx.fillRect(W / 2 - 160, 540, 320, 8);
+    ctx.fillStyle = colors.accent; ctx.fillRect(W / 2 - 160, 540, 320 * Math.max(pct, n ? 2 : 0) / 100, 8);
+
+    const proj = d3.geoNaturalEarth1().fitExtent([[60, 610], [W - 60, 1130]], { type: 'MultiPoint', coordinates: [[-168, -56], [180, 82], [-180, 82]] });
+    const path = d3.geoPath(proj, ctx);
+    ctx.beginPath(); path(HI.land); ctx.fillStyle = '#2E2E2E'; ctx.fill();
+    ctx.beginPath(); visitedGeo().forEach(c => (HI.byC.get(c) || []).forEach(f => path(f))); ctx.fillStyle = colors.accent; ctx.fill();
+    ctx.beginPath(); path(HI.borders); ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1; ctx.stroke();
+    SMALL.forEach(c => { if (!isVisited(c)) return; const q = proj(GEO.get(c).center); ctx.beginPath(); ctx.arc(q[0], q[1], 5, 0, Math.PI * 2); ctx.fillStyle = colors.accent; ctx.fill(); });
+
+    const per = {};
+    COUNTRIES.forEach(c => { if (isVisited(c.c)) per[c.k] = 1; });
+    const codes = Object.keys(state.visited).filter(c => GEO.has(c));
+    if (!worldArea) renderStats();
+    const area = codes.reduce((a, c) => a + areaOf(c), 0) / worldArea * 100;
+    const nc = Object.values(state.cities).reduce((a, l) => a + l.length, 0);
+    const boxes = [['CONTINENTS', `${Object.keys(per).length}/6`], ['VILLES', String(nc)], ['SURFACE', (area < 10 ? area.toFixed(1) : Math.round(area)) + ' %']];
+    boxes.forEach(([label, val], k) => {
+      const bw = 300, gap = 30, bx = (W - (bw * 3 + gap * 2)) / 2 + k * (bw + gap), by = 1190;
+      ctx.fillStyle = '#121212'; roundRect(ctx, bx, by, bw, 170, 32); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#8A8A8A'; ctx.font = font(600, 26); ctx.fillText(label, bx + bw / 2, by + 58);
+      ctx.fillStyle = '#fff'; ctx.font = font(700, 64); ctx.fillText(val, bx + bw / 2, by + 135);
+    });
+
+    const flags = list.sort((a, b) => state.visited[a] - state.visited[b]).slice(0, 24);
+    const fw = 112, fh = 84, fg = 18, cols = Math.min(6, Math.max(1, flags.length));
+    const imgs = await Promise.all(flags.map(c => loadImg(flagSrc(c))));
+    imgs.forEach((img, k) => {
+      const row = Math.floor(k / 6), col = k % 6;
+      const inRow = Math.min(6, flags.length - row * 6);
+      const fx = (W - (inRow * fw + (inRow - 1) * fg)) / 2 + col * (fw + fg), fy = 1420 + row * (fh + fg);
+      ctx.save(); roundRect(ctx, fx, fy, fw, fh, 12); ctx.clip();
+      if (img) ctx.drawImage(img, fx, fy, fw, fh); else { ctx.fillStyle = '#222'; ctx.fillRect(fx, fy, fw, fh); }
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 2; roundRect(ctx, fx, fy, fw, fh, 12); ctx.stroke();
+    });
+    if (!flags.length) { ctx.fillStyle = '#6B6B6B'; ctx.font = font(500, 34); ctx.fillText('Mon tour du monde commence ici', W / 2, 1500); }
+    if (n > 24) { ctx.fillStyle = '#8A8A8A'; ctx.font = font(600, 30); ctx.fillText(`+ ${n - 24} autres pays`, W / 2, 1420 + 4 * (fh + fg) + 20); }
+    ctx.fillStyle = '#EDEDED'; ctx.font = font(600, 44);
+    ctx.fillText('N O M A D', W / 2, H - 90);
+    return new Promise(res => cv.toBlob(res, 'image/png'));
+  }
+  $('#share').onclick = async () => {
+    const btn = $('#share');
+    btn.disabled = true;
+    try {
+      const blob = await makeShareCard();
+      const name = 'nomad-passeport.png';
+      if (NATIVE_FS && Plugins.Share) {
+        await FSP.writeFile({ path: name, data: await blobToB64(blob), directory: 'CACHE' });
+        const { uri } = await FSP.getUri({ path: name, directory: 'CACHE' });
+        await Plugins.Share.share({ title: 'Mon passeport Nomad', files: [uri], dialogTitle: 'Partager mon passeport' });
+      } else {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = name; a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      }
+    } catch (e) {
+      if (!/cancel/i.test(String(e && e.message))) toast('Partage impossible');
+    } finally { btn.disabled = false; }
+  };
   $('#recent').addEventListener('click', e => { const b = e.target.closest('[data-open]'); b && openSheet(b.dataset.open); });
   function renderWish() {
     const list = Object.keys(state.wish).filter(known).sort((a, b) => info(a).name.localeCompare(info(b).name, 'fr'));

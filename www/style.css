@@ -675,3 +675,24 @@ button, a, input { touch-action: manipulation; }
 .settings .seg.small button { padding: 6px 11px; font-size: 13px; }
 #wish-swatches.off { opacity: 1; pointer-events: auto; }
 #wish-swatches { border-top: 0; }
+
+/* ---------- Passeport : partage + statistiques ---------- */
+.pp-actions { display: flex; align-items: center; gap: 8px; }
+.share-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); font-size: 14px; font-weight: 600;
+}
+.share-btn svg { width: 17px; height: 17px; }
+.share-btn:disabled { opacity: .5; }
+.stats2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stats2 .stat.wide { grid-column: 1 / -1; }
+.stats2 .stat.wide b { font-size: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.years-card { margin-top: 10px; padding: 14px 16px 12px; }
+.years-card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.years-card-head span { font-size: 11px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+.years-card-head small { color: var(--muted); font-size: 12px; }
+.year-bars { display: flex; align-items: flex-end; gap: 6px; height: 120px; }
+.yb { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; min-width: 0; }
+.yb i { width: 100%; max-width: 26px; min-height: 3px; border-radius: 6px 6px 3px 3px; background: var(--accent); transition: height .6s var(--ease); }
+.yb b { font-size: 11px; font-weight: 700; }
+.yb span { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }

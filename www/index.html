@@ -38,9 +38,12 @@
       <div class="scroll passport">
         <div class="pp-head">
           <span class="eyebrow">Votre passeport</span>
-          <div class="seg small" id="unit">
-            <button data-unit="n">123</button>
-            <button data-unit="pct">%</button>
+          <div class="pp-actions">
+            <div class="seg small" id="unit">
+              <button data-unit="n">123</button>
+              <button data-unit="pct">%</button>
+            </div>
+            <button class="share-btn" id="share"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/></svg>Partager</button>
           </div>
         </div>
         <div class="big-num" id="big-num"></div>
@@ -53,6 +56,17 @@
           <div class="stat"><span>Pays</span><b data-n></b><small>sur <i data-total></i></small></div>
           <div class="stat"><span>Continents</span><b id="st-cont"></b><small>sur 6</small></div>
           <div class="stat"><span>Photos</span><b id="st-photos"></b><small id="st-albums"></small></div>
+        </div>
+
+        <h3 class="section">Statistiques</h3>
+        <div class="stats2">
+          <div class="stat"><span>Surface</span><b id="st-area"></b><small>des terres du monde</small></div>
+          <div class="stat"><span>Villes</span><b id="st-cities"></b><small id="st-cities-sub"></small></div>
+          <div class="stat wide"><span>Le plus loin de chez toi</span><b id="st-far"></b><small id="st-far-km"></small></div>
+        </div>
+        <div class="card years-card">
+          <div class="years-card-head"><span>Pays découverts par année</span><small id="years-total"></small></div>
+          <div id="year-bars" class="year-bars"></div>
         </div>
 
         <h3 class="section">Par continent</h3>
