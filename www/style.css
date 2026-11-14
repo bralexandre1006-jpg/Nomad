@@ -489,8 +489,6 @@ body.intro .map-bottom { opacity: 0; transform: translateY(24px); pointer-events
 /* ---------- Performance ---------- */
 .flag { content-visibility: auto; contain-intrinsic-size: 98px 120px; }
 .country-list li { content-visibility: auto; contain-intrinsic-size: 300px 56px; }
-#sheet, #finder, #viewer, .view { will-change: transform, opacity; }
-#globe, #plan { will-change: contents; }
 button, a, input { touch-action: manipulation; }
 
 /* ---------- Villes ---------- */

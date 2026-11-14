@@ -1709,6 +1709,7 @@
     async function play() {
       const code = state.home, geo = GEO.get(code);
       skip = false;
+      introAt = performance.now();
       el.classList.add('show');
       document.body.classList.add('intro');
       size();
@@ -1742,6 +1743,7 @@
     el.addEventListener('click', () => { skip = true; });
     return { play };
   })();
+  let introAt = 0;
   const playIntro = () => intro.play();
 
   let onboardFirst = false;
@@ -1793,7 +1795,22 @@
     if (current === 'map' && state.mode === 'plan') plan.init();
     if (current === 'passport') mini.init();
   });
-  const redrawAll = () => { globe.dirty = true; plan.redraw(); mini.redraw(); if (globe.active) globe.start(); };
+  const redrawAll = () => {
+    // intro bloquée (app mise en arrière-plan pendant l'animation) : on la termine
+    if (document.body.classList.contains('intro') && performance.now() - introAt > 8000) {
+      $('#intro').classList.remove('show');
+      document.body.classList.remove('intro');
+    }
+    if (!document.body.classList.contains('intro')) {
+      const v = $('#veil'); v.getAnimations().forEach(a => a.cancel()); v.style.opacity = 0;
+    }
+    // force le navigateur à repeindre toute la page
+    document.body.style.transform = 'translateZ(0)';
+    requestAnimationFrame(() => { document.body.style.transform = ''; });
+    globe.resize(); globe.dirty = true;
+    plan.redraw(); mini.redraw();
+    if (globe.active) globe.start();
+  };
   document.addEventListener('visibilitychange', () => { if (!document.hidden) requestAnimationFrame(redrawAll); });
   ['#plan', '#mini'].forEach(sel => $(sel).addEventListener('contextrestored', redrawAll));
   try { Plugins.App && Plugins.App.addListener('resume', () => requestAnimationFrame(redrawAll)); } catch {}
