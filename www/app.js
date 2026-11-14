@@ -404,7 +404,10 @@
       g.running = true; prev = 0;
       requestAnimationFrame(frame);
     };
-    document.addEventListener('visibilitychange', () => !document.hidden && g.active && g.start());
+    const wake = () => { if (document.hidden) return; g.dirty = true; if (g.active) g.start(); };
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('pageshow', wake);
+    canvas.addEventListener('contextrestored', wake);
 
     const pointers = new Map();
     let gesture = null;
@@ -1790,6 +1793,10 @@
     if (current === 'map' && state.mode === 'plan') plan.init();
     if (current === 'passport') mini.init();
   });
+  const redrawAll = () => { globe.dirty = true; plan.redraw(); mini.redraw(); if (globe.active) globe.start(); };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) requestAnimationFrame(redrawAll); });
+  ['#plan', '#mini'].forEach(sel => $(sel).addEventListener('contextrestored', redrawAll));
+  try { Plugins.App && Plugins.App.addListener('resume', () => requestAnimationFrame(redrawAll)); } catch {}
   migratePhotos().catch(() => {}).then(() => PhotoDB.counts()).then(c => { photoCounts = c; renderPhotoCounts(); }).catch(() => {});
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 })();
