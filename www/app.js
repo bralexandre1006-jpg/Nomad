@@ -99,7 +99,7 @@
     const feats = HI.byC.get(c.c) || [];
     if (!feats.length && SUBMAP.has(c.c)) return;
     const area = feats.reduce((s, f) => s + d3.geoArea(f), 0);
-    GEO.set(c.c, { feats, center: largestCenter(feats) || (c.c === 'TV' ? [179.2, -8.52] : [0, 0]), small: !feats.length || area < 2.2e-4 });
+    GEO.set(c.c, { feats, area, center: largestCenter(feats) || (c.c === 'TV' ? [179.2, -8.52] : [0, 0]), small: !feats.length || area < 2.2e-4 });
   });
   const SMALL = [...GEO.keys()].filter(c => GEO.get(c).small);
   const visitedGeo = () => Object.keys(state.visited).filter(c => GEO.has(c));
@@ -342,10 +342,11 @@
       SMALL.forEach(code => {
         const ctr = GEO.get(code).center;
         if (d3.geoDistance(ctr, c) > Math.PI / 2 - 0.02) return;
+        // point seulement pour un lieu visité trop petit pour être vu à ce zoom
+        if (!isVisited(code) || Math.sqrt(GEO.get(code).area) * R > 2.5) return;
         const [x, y] = proj(ctr);
-        const v = isVisited(code);
-        ctx.beginPath(); ctx.arc(x, y, v ? 3.6 : 2.2, 0, Math.PI * 2);
-        ctx.fillStyle = v ? colors.accent : colors.land; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+        ctx.fillStyle = colors.accent; ctx.fill();
       });
 
       if (g.selected) {
@@ -648,11 +649,10 @@
       ctx.lineWidth = (interactive ? 0.6 : 0.4) / t.k; ctx.strokeStyle = colors.border; ctx.stroke(P.borders);
       const rv = (interactive ? 3 : 1.8) / Math.sqrt(t.k);
       SMALL.forEach(code => {
-        const v = isVisited(code);
-        if (!v && !interactive) return;
+        if (!isVisited(code) || Math.sqrt(GEO.get(code).area) * proj.scale() * t.k > 2.5) return;
         const [x, y] = P.pts.get(code);
-        ctx.beginPath(); ctx.arc(x, y, v ? rv : rv * 0.65, 0, Math.PI * 2);
-        ctx.fillStyle = v ? colors.accent : colors.land; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, rv * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = colors.accent; ctx.fill();
       });
       if (interactive && m.selected && P.byC.get(m.selected)) {
         ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
