@@ -692,9 +692,9 @@
       d3.select(canvas).transition().duration(800).call(zoomer.transform, tr);
     };
     m.top = () => canvas.getBoundingClientRect().top;
-    m.panTo = ll => {
+    m.panTo = (ll, keep) => {
       if (!zoomer) return;
-      const k = Math.max(t.k, 6), [x, y] = proj(ll);
+      const k = keep ? t.k : Math.max(t.k, 6), [x, y] = proj(ll);
       const area = sheetArea();
       const tr = d3.zoomIdentity.translate(W / 2 - k * x, (area.top + area.bottom) / 2 - k * y).scale(k);
       d3.select(canvas).transition().duration(700).call(zoomer.transform, tr);
@@ -1176,7 +1176,8 @@
     sheet.openedAt = performance.now();
     $('#hl-shape').innerHTML = shapeSVG(code);
     renderSheetHead();
-    const wasOpen = sheetEl.classList.contains('show');
+    const wasOpen = sheetEl.classList.contains('show') && sheet.open;
+    sheet.keep = wasOpen;
     sheetEl.getAnimations().forEach(a => a.cancel());
     sheetEl.style.transform = '';
     activeCity = -1;
@@ -1202,6 +1203,11 @@
   function focusArea(code) {
     if (!sheet.open || sheet.code !== code) return;
     const area = sheetArea();
+    if (sheet.keep) {
+      if (state.mode === 'globe') globe.focus(code, false, area);
+      else if (GEO.has(code)) plan.panTo(GEO.get(code).center, true);
+      return;
+    }
     if (state.mode === 'globe') globe.focus(code, true, area);
     else plan.zoomTo(code, area);
   }
@@ -1452,7 +1458,7 @@
     const u = await pvUrl(p).catch(() => '');
     const poster = p.thumbData || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
     d.innerHTML = p.type === 'video'
-      ? `<video src="${u}" controls playsinline preload="auto" poster="${poster}"></video>`
+      ? `<video src="${u}" playsinline preload="auto" poster="${poster}"></video>`
       : `<img src="${u}" alt="" draggable="false">`;
     return d;
   }
@@ -1474,7 +1480,12 @@
     $('#pv-time').textContent = `${info(sheet.code).name} · ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
     $('#pv-fav').classList.toggle('on', !!p.fav);
     const v = curMedia();
-    if (v && v.tagName === 'VIDEO') { v.muted = false; v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); }
+    if (v && v.tagName === 'VIDEO') {
+      pvEl.classList.add('chrome-off');
+      v.controls = false;
+      v.onended = () => { pvEl.classList.remove('chrome-off'); v.controls = true; };
+      v.muted = false; v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+    }
     pvStrip();
   }
   const curMedia = () => pvTrack.children[1] && pvTrack.children[1].firstElementChild;
@@ -1489,9 +1500,13 @@
         thumbSrc(p).then(u => { if (u) el.style.backgroundImage = `url("${u}")`; else queueThumb(p, x => { el.style.backgroundImage = `url("${x}")`; }); }).catch(() => {});
       });
     }
-    $$('button', st).forEach((b, k) => b.classList.toggle('on', k === pv.i));
-    const cur = st.children[pv.i];
-    if (cur) st.scrollTo({ left: cur.offsetLeft - st.clientWidth / 2 + cur.offsetWidth / 2, behavior: 'smooth' });
+    pvStripSel(pv.i);
+  }
+  function pvStripSel(k) {
+    const st = $('#pv-strip');
+    $$('button', st).forEach((b, n) => b.classList.toggle('on', n === k));
+    const cur = st.children[k];
+    if (cur) st.scrollTo({ left: cur.offsetLeft - st.clientWidth / 2 + 23, behavior: 'smooth' });
   }
   $('#pv-strip').addEventListener('click', e => { const b = e.target.closest('[data-sk]'); if (b) pvGo(+b.dataset.sk); });
   $('#pv-fav').onclick = async () => {
@@ -1514,7 +1529,7 @@
     const pts = new Map();
     let g = null, lastTap = 0;
     pvTrack.addEventListener('pointerdown', e => {
-      if (e.target.tagName === 'VIDEO' && e.clientY > window.innerHeight - 90) return;
+      if (e.target.tagName === 'VIDEO' && e.target.controls && e.clientY > e.target.getBoundingClientRect().bottom - 60) return;
       pvTrack.setPointerCapture(e.pointerId);
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pts.size === 1) g = { mode: null, x0: e.clientX, y0: e.clientY, tx0: pv.tx, ty0: pv.ty, t: performance.now(), moved: false };
@@ -1565,7 +1580,7 @@
         pvTrack.style.transition = 'transform .28s cubic-bezier(.2,.8,.2,1)';
         const dir = dx < -W * 0.18 && pv.i < sheet.photos.length - 1 ? 1 : dx > W * 0.18 && pv.i > 0 ? -1 : 0;
         pvTrack.style.transform = `translateX(${-100 - dir * 100}vw)`;
-        if (dir) setTimeout(() => pvGo(pv.i + dir), 280);
+        if (dir) { pvStripSel(pv.i + dir); setTimeout(() => pvGo(pv.i + dir), 280); }
       } else if (g.mode === 'down') {
         pvEl.style.removeProperty('--pull');
         if (dy > 120) closePhoto();
@@ -1581,7 +1596,12 @@
           }
         } else {
           lastTap = now;
-          setTimeout(() => { if (lastTap === now) pvEl.classList.toggle('chrome-off'); }, 300);
+          setTimeout(() => {
+            if (lastTap !== now) return;
+            const off = pvEl.classList.toggle('chrome-off');
+            const v = curMedia();
+            if (v && v.tagName === 'VIDEO') v.controls = !off;
+          }, 300);
         }
       }
       g = null;
@@ -2303,7 +2323,7 @@
       const spin = d3.interpolate(from, target);
       const name = $('#intro-name');
       name.getAnimations().forEach(a => a.cancel());
-      name.innerHTML = '<div class="iw">' + 'NOMAD'.split('').map((l, i) => `<span style="--i:${i}">${l}</span>`).join('') + '</div><i class="il"></i><small>Ton monde, pays après pays</small>';
+      name.innerHTML = '<div class="iw">' + 'NOMAD'.split('').map((l, i) => `<span style="--i:${i}">${l}</span>`).join('') + '</div><i class="il"></i>';
       await run(1700, (e, k) => {
         const appear = d3.easeBackOut.overshoot(1.3)(Math.min(1, k / 0.25));
         draw(spin(e), Math.max(0.01, appear), Math.min(1, k / 0.15), Math.max(0, (k - 0.7) / 0.3), true);

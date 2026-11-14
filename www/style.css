@@ -544,7 +544,7 @@ button, a, input { touch-action: manipulation; }
 #placebar button { padding: 8px 12px; border-radius: 12px; background: var(--surface-2); font-weight: 600; }
 
 /* ---------- Mode pays : fiche réduite + cartes de villes ---------- */
-#scrim.light { background: transparent; }
+#scrim.light { background: transparent; pointer-events: none; }
 #sheet.peek .sheet-full { display: none; }
 .sheet-more { display: none; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .sheet-more svg { width: 18px; height: 18px; }
@@ -839,3 +839,6 @@ button, a, input { touch-action: manipulation; }
 #pv-fav.on svg { fill: #0A84FF; }
 #pviewer.chrome-off { background: #000; }
 .pv-slide video { width: 100%; max-height: 100%; background: #000; }
+
+#pviewer.chrome-off .pv-slide video { max-height: 100%; }
+#pviewer:not(.chrome-off) .pv-slide video { max-height: calc(100% - 260px); }
