@@ -611,3 +611,34 @@ button, a, input { touch-action: manipulation; }
 #sheet:not(.peek) .sheet-expand span { font-size: 0; }
 #sheet:not(.peek) .sheet-expand span::after { content: "Réduire"; font-size: 12px; }
 #sheet .sheet-head > .flag-wrap { flex: 0 0 58px; }
+
+/* ---------- Fiche compacte v3 ---------- */
+#sheet { padding-bottom: calc(8px + var(--safe-bottom)); }
+#sheet .grab { padding: 7px 0 3px; }
+#sheet .sheet-head { padding: 2px 0 10px; gap: 12px; }
+.flag-wrap, #sheet .sheet-head > .flag-wrap { flex: 0 0 46px; width: 46px; height: 46px; border-radius: 14px; }
+#sheet #sheet-flag { width: 30px; height: 22px; border-radius: 4px; }
+#sheet #sheet-name { font-size: 20px; margin-bottom: 4px; }
+.badge { height: 21px; padding: 0 8px; font-size: 11px; gap: 4px; }
+.badge svg { width: 12px; height: 12px; }
+#sheet .icon-btn { width: 32px; height: 32px; }
+#sheet .icon-btn svg { width: 17px; height: 17px; }
+.sec { padding: 10px 0 0; }
+.sec-head { margin-bottom: 7px; }
+.sec-head h4 { font-size: 11px; letter-spacing: 1.3px; }
+.sec-add { font-size: 12px; padding: 2px; }
+#sheet .chip > button { padding: 6px 3px 6px 10px; font-size: 12.5px; gap: 6px; }
+#sheet .chip > button i { width: 7px; height: 7px; }
+#sheet .chip .x { padding: 6px 10px 6px 4px; font-size: 14px; }
+#sheet .city-chips { margin-bottom: 2px; }
+.sec-empty { font-size: 12px; margin: 0; }
+#sheet .highlights { gap: 10px; padding-bottom: 0; }
+#sheet .hl { width: 56px; gap: 4px; }
+#sheet .hl-ring { width: 52px; height: 52px; padding: 2px; border-width: 1.5px; }
+#sheet .hl-ring.add svg { width: 20px; height: 20px; }
+#sheet .hl small { font-size: 10px; max-width: 56px; }
+.sheet-full { padding-bottom: 8px; }
+#sheet .visit-btn { padding: 11px; font-size: 14px; border-radius: 12px; }
+#sheet .year-row { margin-top: 8px; padding: 10px 12px; border-radius: 12px; font-size: 14px; }
+.sheet-expand { margin-top: 4px; padding: 6px; font-size: 11px; }
+#sheet:not(.peek) .sheet-expand span::after { font-size: 11px; }
