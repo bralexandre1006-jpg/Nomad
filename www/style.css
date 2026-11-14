@@ -727,3 +727,5 @@ button, a, input { touch-action: manipulation; }
 
 #story-video.wait { opacity: 0; }
 #story-video { transition: opacity .15s; }
+
+.hl-ring svg path, .story-av path, #step-shape path { vector-effect: non-scaling-stroke; stroke-width: 1.3px; }

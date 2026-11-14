@@ -1007,7 +1007,14 @@
     let d = '';
     if (best) {
       const ctr = d3.geoCentroid(best);
-      const pr = d3.geoAzimuthalEqualArea().rotate([-ctr[0], -ctr[1]]).fitExtent([[18, 18], [82, 82]], best);
+      // centré sur le milieu de la forme et agrandi au maximum dans le cercle (rayon 38 sur 50)
+      const pr = d3.geoAzimuthalEqualArea().rotate([-ctr[0], -ctr[1]]).scale(1).translate([0, 0]);
+      const pts = best.coordinates[0].map(q => pr(q)).filter(Boolean);
+      const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+      const rmax = Math.max(...pts.map(q => Math.hypot(q[0] - cx, q[1] - cy))) || 1;
+      const k = 38 / rmax;
+      pr.scale(k).translate([50 - cx * k, 50 - cy * k]);
       d = d3.geoPath(pr)(best);
     }
     outlineCache.set(code, d);
