@@ -642,3 +642,16 @@ button, a, input { touch-action: manipulation; }
 #sheet .year-row { margin-top: 8px; padding: 10px 12px; border-radius: 12px; font-size: 14px; }
 .sheet-expand { margin-top: 4px; padding: 6px; font-size: 11px; }
 #sheet:not(.peek) .sheet-expand span::after { font-size: 11px; }
+
+/* ---------- Liste d'envies ---------- */
+.wish-btn { color: var(--muted); }
+.wish-btn svg { transition: transform .25s var(--ease), fill .2s; }
+.wish-btn.on { color: var(--wish); }
+.wish-btn.on svg { fill: var(--wish); transform: scale(1.08); }
+.wish-btn:active svg { transform: scale(.8); }
+#sheet .wish-btn { align-self: flex-start; }
+.badge.wish { background: color-mix(in srgb, var(--wish) 20%, transparent); color: var(--wish); }
+.list-card .dot.wish { background: var(--wish); }
+#wish-swatches.off { opacity: .35; pointer-events: none; }
+#wish-swatches { border-top: 1px solid var(--line); }
+.section span { color: var(--muted); }

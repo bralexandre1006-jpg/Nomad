@@ -18,8 +18,8 @@
   const Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
 
   const state = (() => {
-    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null, unit: 'n', mode: 'globe', years: {}, cities: {}, cityColor: '#FFC93C' };
-    try { const s = { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; s.years = s.years || {}; s.cities = s.cities || {};
+    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null, unit: 'n', mode: 'globe', years: {}, cities: {}, cityColor: '#FFC93C', wish: {}, showWish: true, wishColor: '#FF5A5F' };
+    try { const s = { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; s.years = s.years || {}; s.cities = s.cities || {}; s.wish = s.wish || {};
       ['ES-CN', 'ES-IB', 'PT-20'].forEach(k => { delete s.visited[k]; delete s.years[k]; delete s.cities[k]; });
       return s; } catch { return d; }
   })();
@@ -88,6 +88,8 @@
   });
   const SMALL = [...GEO.keys()].filter(c => GEO.get(c).small);
   const visitedGeo = () => Object.keys(state.visited).filter(c => GEO.has(c));
+  const wishGeo = () => (state.showWish ? Object.keys(state.wish).filter(c => GEO.has(c) && !state.visited[c]) : []);
+  const isWish = c => !!state.wish[c];
   const hitCountry = ll => {
     for (const [code, g] of GEO) if (g.feats.some(f => d3.geoContains(f, ll))) return code;
     return null;
@@ -110,6 +112,8 @@
     const cs = getComputedStyle(root);
     ['ocean', 'ocean-2', 'land', 'border', 'graticule', 'accent', 'brand', 'bg'].forEach(k => { colors[k] = cs.getPropertyValue('--' + k).trim(); });
     colors.city = state.cityColor;
+    colors.wish = state.wishColor;
+    root.style.setProperty('--wish', state.wishColor);
     root.style.setProperty('--city', state.cityColor);
     try { Plugins.StatusBar && Plugins.StatusBar.setStyle({ style: mode === 'dark' ? 'DARK' : 'LIGHT' }); } catch {}
     globe.dirty = true;
@@ -150,7 +154,7 @@
 
   function setVisited(code, on, year) {
     const c = info(code);
-    if (on) { state.visited[code] = Date.now(); if (year) state.years[code] = year; }
+    if (on) { state.visited[code] = Date.now(); if (year) state.years[code] = year; delete state.wish[code]; }
     else { delete state.visited[code]; delete state.years[code]; }
     save();
     renderCounters();
@@ -255,7 +259,7 @@
     });
     ctx.restore();
   }
-  const focusFill = code => (isVisited(code) ? colors.accent : d3.interpolateRgb(colors.land, '#ffffff')(0.18));
+  const focusFill = code => (isVisited(code) ? colors.accent : state.showWish && isWish(code) ? colors.wish : d3.interpolateRgb(colors.land, '#ffffff')(0.18));
 
   /* ---------- Globe ---------- */
   const globe = (() => {
@@ -304,6 +308,12 @@
       ctx.beginPath(); path(grat); ctx.strokeStyle = colors.graticule; ctx.lineWidth = 0.7; ctx.stroke();
 
       ctx.beginPath(); path(G.land); ctx.fillStyle = colors.land; ctx.fill();
+      const wl = wishGeo();
+      if (wl.length) {
+        ctx.beginPath();
+        wl.forEach(code => (G.byC.get(code) || []).forEach(f => path(f)));
+        ctx.fillStyle = colors.wish; ctx.fill();
+      }
       ctx.beginPath();
       visitedGeo().forEach(code => (G.byC.get(code) || []).forEach(f => path(f)));
       ctx.fillStyle = colors.accent; ctx.fill();
@@ -571,6 +581,8 @@
       ctx.setTransform(dpr * t.k, 0, 0, dpr * t.k, dpr * t.x, dpr * t.y);
       if (interactive) { ctx.fillStyle = colors.ocean; ctx.fill(P.sphere); }
       ctx.fillStyle = colors.land; ctx.fill(P.land);
+      ctx.fillStyle = colors.wish;
+      wishGeo().forEach(code => { const p = P.byC.get(code); if (p) ctx.fill(p); });
       ctx.fillStyle = colors.accent;
       visitedGeo().forEach(code => { const p = P.byC.get(code); if (p) ctx.fill(p); });
       ctx.lineWidth = (interactive ? 0.6 : 0.4) / t.k; ctx.strokeStyle = colors.border; ctx.stroke(P.borders);
@@ -674,9 +686,29 @@
     const albums = Object.values(photoCounts).filter(v => v > 0).length;
     $('#st-photos').textContent = photos;
     $('#st-albums').textContent = `${albums} album${albums > 1 ? 's' : ''}`;
+    renderWish();
     mini.redraw();
   }
   $('#recent').addEventListener('click', e => { const b = e.target.closest('[data-open]'); b && openSheet(b.dataset.open); });
+  function renderWish() {
+    const list = Object.keys(state.wish).filter(known).sort((a, b) => info(a).name.localeCompare(info(b).name, 'fr'));
+    $('#wish-count').textContent = list.length ? ` · ${list.length}` : '';
+    $('#wish-list').innerHTML = list.length
+      ? list.map(c => `<button data-open="${c}"><img src="${flagSrc(c)}" alt=""><span>${esc(info(c).name)}</span><i class="dot wish"></i></button>`).join('')
+      : '<div class="empty">Touche ♡ sur la fiche d\'un pays pour l\'ajouter à tes envies.</div>';
+  }
+  $('#wish-list').addEventListener('click', e => { const b = e.target.closest('[data-open]'); b && openSheet(b.dataset.open); });
+  function toggleWish(code) {
+    if (isWish(code)) { delete state.wish[code]; toast(`${info(code).name} retiré de tes envies`); }
+    else { state.wish[code] = Date.now(); toast(`${info(code).name} ajouté à tes envies`); }
+    if (navigator.vibrate) navigator.vibrate(10);
+    save();
+    renderWish();
+    if (sheet.code === code) renderSheetHead();
+    globe.dirty = true; plan.redraw(); mini.redraw();
+    applyListFilter(); applyFlagFilter();
+  }
+  $('#wish-btn').onclick = () => toggleWish(sheet.code);
 
   /* ---------- Drapeaux ---------- */
   const filters = { flags: 'all', list: 'all' };
@@ -689,7 +721,7 @@
       group.dataset.filterGroup === 'flags' ? applyFlagFilter() : applyListFilter();
     });
   });
-  const passes = (code, f) => f === 'all' || (f === 'visited') === isVisited(code);
+  const passes = (code, f) => f === 'all' || (f === 'wish' ? isWish(code) : (f === 'visited') === isVisited(code));
 
   let flagsBuilt = false;
   function buildFlags() {
@@ -774,12 +806,14 @@
     const nc = (state.cities[c.c] || []).length;
     const ico = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
     $('#sheet-badges').innerHTML = [
-      v ? `<span class="badge ok">${CHECK}Visité</span>` : '<span class="badge">Pas encore visité</span>',
+      v ? `<span class="badge ok">${CHECK}Visité</span>` : isWish(c.c) ? '<span class="badge wish">♥ Envie d\'y aller</span>' : '<span class="badge">Pas encore visité</span>',
       y ? `<span class="badge">${ico('<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/>')}${y}</span>` : '',
       nc ? `<span class="badge">${ico('<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>')}${nc}</span>` : '',
       n ? `<span class="badge">${ico('<rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/>')}${n}</span>` : '',
       SUBMAP.has(c.c) ? `<span class="badge muted">${esc(c.g || byCode.get(c.p).name)}</span>` : ''
     ].join('');
+    $('#wish-btn').hidden = v;
+    $('#wish-btn').classList.toggle('on', isWish(c.c));
     const btn = $('#visit-btn');
     btn.classList.toggle('on', v);
     btn.innerHTML = v ? `${CHECK}<span>Visité</span>` : '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Marquer comme visité</span>';
@@ -1325,9 +1359,23 @@
       `<button class="swatch${c.toLowerCase() === state.cityColor.toLowerCase() ? ' active' : ''}" style="background:${c}" data-city-color="${c}" aria-label="Couleur ${c}"></button>`).join('');
     $$('#theme button').forEach(b => b.classList.toggle('active', b.dataset.theme === state.theme));
     $('#autorotate').checked = state.autoRotate;
+    $('#show-wish').checked = state.showWish;
+    $('#wish-swatches').innerHTML = WISH_COLORS.map(c =>
+      `<button class="swatch${c.toLowerCase() === state.wishColor.toLowerCase() ? ' active' : ''}" style="background:${c}" data-wish-color="${c}" aria-label="Couleur ${c}"></button>`).join('');
+    $('#wish-swatches').classList.toggle('off', !state.showWish);
     const h = byCode.get(state.home);
     $('#home-value').textContent = h ? h.name : 'Choisir';
   }
+  const WISH_COLORS = ['#FF5A5F', '#FF9F1C', '#F6BF26', '#4CC9F0', '#B388FF', '#FF4FD8', '#7CFFB2', '#9E9E9E'];
+  $('#wish-swatches').addEventListener('click', e => {
+    const b = e.target.closest('[data-wish-color]');
+    if (!b) return;
+    state.wishColor = b.dataset.wishColor; save(); applyTheme(); renderSettings();
+  });
+  $('#show-wish').addEventListener('change', e => {
+    state.showWish = e.target.checked; save(); renderSettings();
+    globe.dirty = true; plan.redraw(); mini.redraw();
+  });
   const CITY_COLORS = ['#FFC93C', '#FFFFFF', '#FF6B6B', '#4CC9F0', '#B388FF', '#FF9F1C', '#7CFFB2', '#FF4FD8'];
   $('#city-swatches').addEventListener('click', e => {
     const b = e.target.closest('[data-city-color]');
@@ -1376,7 +1424,8 @@
         settings: { color: state.color, theme: state.theme, autoRotate: state.autoRotate },
         visited: state.visited,
         years: state.years,
-        cities: state.cities
+        cities: state.cities,
+        wish: state.wish
       });
       const FS = Plugins.Filesystem, Share = Plugins.Share;
       const native = FS && Share && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
@@ -1428,6 +1477,7 @@
     let ok = 0;
     try {
       codes.forEach(c => { if (!state.visited[c]) state.visited[c] = Number(data.visited[c]) || Date.now(); });
+      Object.keys(data.wish || {}).filter(known).forEach(c => { if (!state.visited[c]) state.wish[c] = state.wish[c] || Date.now(); });
       Object.entries(data.cities || {}).forEach(([c, list]) => {
         if (!known(c) || !Array.isArray(list)) return;
         const cur = state.cities[c] || (state.cities[c] = []);
