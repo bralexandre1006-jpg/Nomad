@@ -351,7 +351,6 @@
       }
       const vis = ll => (d3.geoDistance(ll, c) < Math.PI / 2 - 0.01 ? proj(ll) : null);
       if (g.dim > 0.5 && g.selected) drawCities(ctx, vis, 0, true, g.selected);
-      else drawCities(ctx, vis, Math.min(3.5, 2.2 + zoom * 0.1), false, null);
 
       const shade = ctx.createRadialGradient(X - R * 0.3, Y - R * 0.35, R * 0.15, X, Y, R);
       shade.addColorStop(0, 'rgba(255, 255, 255, .07)');
@@ -605,8 +604,6 @@
         ctx.lineWidth = 1.4 / t.k; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.stroke(P.byC.get(m.selected));
       }
       if (interactive && m.selected) drawCities(ctx, ll => proj(ll), 0, true, m.selected, t.k);
-      else if (interactive) drawCities(ctx, ll => proj(ll), 2.4 / t.k, false, null, t.k);
-      else drawCities(ctx, ll => proj(ll), 1.6, false, null);
       if (m.selected) {
         ctx.lineWidth = 2 / t.k; ctx.strokeStyle = colors.brand;
         const p = P.byC.get(m.selected);
