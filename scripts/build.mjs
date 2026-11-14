@@ -71,7 +71,7 @@ const SUBS = [
     .map(([k, n, x, y]) => [`PT-20-${k}`, 'PT', n, { b: isle(x, y, 0.12), g: 'Açores' }]),
   ['PT-30', 'PT', 'Madère', { b: [[-17.5, 32.3, -16, 33.3]] }],
   ...[
-    ['FR-COR', 'FR', 'Corse', 9.10, 42.16], ['IT-SIC', 'IT', 'Sicile', 14.16, 37.59], ['IT-SAR', 'IT', 'Sardaigne', 9.04, 40.09],
+    ['FR-COR', 'FR', 'Corse', 9.10, 42.16], ['IT-SIC', 'IT', 'Sicile', 14.16, 37.59, null, 'it-sic'], ['IT-SAR', 'IT', 'Sardaigne', 9.04, 40.09],
     ['GR-CRE', 'GR', 'Crète', 24.86, 35.24, 'Îles grecques'], ['GR-RHO', 'GR', 'Rhodes', 27.95, 36.18, 'Îles grecques'],
     ['GR-COR', 'GR', 'Corfou', 19.84, 39.64, 'Îles grecques'], ['GR-LES', 'GR', 'Lesbos', 26.25, 39.17, 'Îles grecques'],
     ['GR-SAN', 'GR', 'Santorin', 25.43, 36.40, 'Îles grecques'], ['GR-MYK', 'GR', 'Mykonos', 25.37, 37.46, 'Îles grecques'],
@@ -82,7 +82,7 @@ const SUBS = [
     ['SE-GOT', 'SE', 'Gotland', 18.50, 57.48], ['TH-PHU', 'TH', 'Phuket', 98.34, 7.97], ['TH-SAM', 'TH', 'Koh Samui', 100.00, 9.51],
     ['MY-LAN', 'MY', 'Langkawi', 99.79, 6.37], ['GB-WIG', 'GB', 'Île de Wight', -1.30, 50.68], ['HR-KRK', 'HR', 'Krk', 14.62, 45.07],
     ['MX-COZ', 'MX', 'Cozumel', -86.91, 20.44]
-  ].map(([c, p, n, x, y, g]) => [c, p, n, { b: isle(x, y, 0.1), g }]),
+  ].map(([c, p, n, x, y, g, f]) => [c, p, n, { b: isle(x, y, 0.1), g: g || undefined, f }]),
   ['US-AK', 'US', 'Alaska', { b: [[-180, 50, -129, 72], [170, 50, 180, 56]] }],
   ['US-HI', 'US', 'Hawaï', { b: [[-161, 18.5, -154, 22.5]] }],
   ['US-PR', 'US', 'Porto Rico', { id: '630', f: 'pr' }],
@@ -120,8 +120,9 @@ const SUBS = [
   ['AU-NF', 'AU', 'Île Norfolk', { id: '574', f: 'nf' }]
 ].map(([c, p, name, o]) => {
   if (!SOVEREIGN.includes(p)) throw new Error('Parent inconnu: ' + c);
-  let f = o.f && fs.existsSync(nm(`flag-icons/flags/4x3/${o.f}.svg`)) ? o.f : null;
-  if (f) fs.copyFileSync(nm(`flag-icons/flags/4x3/${f}.svg`), path.join(www, `flags/${f}.svg`));
+  const extra = o.f && path.join(root, `scripts/flags-extra/${o.f}.svg`);
+  let f = o.f && (fs.existsSync(extra) || fs.existsSync(nm(`flag-icons/flags/4x3/${o.f}.svg`))) ? o.f : null;
+  if (f) fs.copyFileSync(fs.existsSync(extra) ? extra : nm(`flag-icons/flags/4x3/${f}.svg`), path.join(www, `flags/${f}.svg`));
   return { c, p, name, id: o.id, b: o.b, g: o.g, f: f || p.toLowerCase() };
 });
 
