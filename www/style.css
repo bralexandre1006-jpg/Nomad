@@ -647,7 +647,7 @@ button, a, input { touch-action: manipulation; }
 .wish-btn { color: var(--muted); }
 .wish-btn svg { transition: transform .25s var(--ease), fill .2s; }
 .wish-btn.on { color: var(--wish); }
-.wish-btn.on svg { fill: var(--wish); transform: scale(1.08); }
+.wish-btn.on svg { fill: color-mix(in srgb, var(--wish) 35%, transparent); transform: rotate(-12deg) scale(1.08); }
 .wish-btn:active svg { transform: scale(.8); }
 #sheet .wish-btn { align-self: flex-start; }
 .badge.wish { background: color-mix(in srgb, var(--wish) 20%, transparent); color: var(--wish); }
@@ -655,3 +655,23 @@ button, a, input { touch-action: manipulation; }
 #wish-swatches.off { opacity: .35; pointer-events: none; }
 #wish-swatches { border-top: 1px solid var(--line); }
 .section span { color: var(--muted); }
+
+/* ---------- Réglages allégés ---------- */
+.settings .brand { margin-bottom: 10px; }
+.crow { padding: 12px 16px; border-top: 1px solid var(--line); }
+.crow:first-child { border-top: 0; }
+.crow > span { display: block; font-size: 14px; font-weight: 500; margin-bottom: 9px; }
+.mini-sw { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 3px 16px; }
+.mini-sw::-webkit-scrollbar { display: none; }
+.mini-sw > div { display: flex; gap: 8px; }
+.mini-sw .swatch { width: 28px; height: 28px; flex: none; }
+.mini-sw .swatch.active::after { inset: -4px; border-width: 2px; }
+.sw-custom {
+  width: 28px; height: 28px; border-radius: 50%; flex: none; position: relative; overflow: hidden;
+  background: conic-gradient(#ff5a5f, #f6bf26, #2ebd59, #4cc9f0, #8b6cd6, #ff4fd8, #ff5a5f);
+}
+.sw-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+.settings .row { min-height: 50px; padding: 11px 16px; }
+.settings .seg.small button { padding: 6px 11px; font-size: 13px; }
+#wish-swatches.off { opacity: 1; pointer-events: auto; }
+#wish-swatches { border-top: 0; }

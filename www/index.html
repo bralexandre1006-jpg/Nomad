@@ -58,7 +58,7 @@
         <h3 class="section">Par continent</h3>
         <div class="card" id="by-continent"></div>
 
-        <h3 class="section">Envie d'y aller<span id="wish-count"></span></h3>
+        <h3 class="section">Prochaines destinations<span id="wish-count"></span></h3>
         <div class="card list-card" id="wish-list"></div>
 
         <h3 class="section">Derniers pays débloqués</h3>
@@ -76,7 +76,7 @@
         <button class="pill active" data-filter="all">Tous</button>
         <button class="pill" data-filter="visited">Débloqués</button>
         <button class="pill" data-filter="todo">À découvrir</button>
-      <button class="pill" data-filter="wish">Envies</button>
+      <button class="pill" data-filter="wish">En projet</button>
       </div>
       <div class="scroll"><div id="flag-grid" class="flag-grid"></div></div>
     </section>
@@ -90,49 +90,43 @@
           <div><strong>Nomad</strong><span data-counter-text></span></div>
         </div>
 
-        <h3 class="section">Mon pays</h3>
         <div class="card">
           <button class="row" id="home-row"><span>Pays d'origine</span><span class="hint" id="home-value"></span></button>
         </div>
 
-        <h3 class="section">Couleur des pays visités</h3>
+        <h3 class="section">Couleurs</h3>
         <div class="card">
-          <div id="swatches" class="swatches"></div>
-          <label class="row">
-            <span>Couleur personnalisée</span>
-            <input type="color" id="custom-color">
-          </label>
-        </div>
-
-        <h3 class="section">Liste d'envies</h3>
-        <div class="card">
-          <label class="row">
-            <span>Afficher les envies sur la carte</span>
-            <input type="checkbox" class="switch" id="show-wish">
-          </label>
-          <div id="wish-swatches" class="swatches"></div>
-        </div>
-
-        <h3 class="section">Couleur des villes</h3>
-        <div class="card"><div id="city-swatches" class="swatches"></div></div>
-
-        <h3 class="section">Apparence</h3>
-        <div class="card">
-          <div class="seg block" id="theme">
-            <button data-theme="auto">Auto</button>
-            <button data-theme="light">Clair</button>
-            <button data-theme="dark">Sombre</button>
+          <div class="crow">
+            <span>Pays visités</span>
+            <div class="mini-sw"><div id="swatches"></div><label class="sw-custom" aria-label="Couleur personnalisée"><input type="color" id="custom-color"></label></div>
           </div>
-          <label class="row">
-            <span>Rotation automatique du globe</span>
-            <input type="checkbox" class="switch" id="autorotate">
-          </label>
+          <div class="crow">
+            <span>Prochaines destinations</span>
+            <div class="mini-sw"><div id="wish-swatches"></div></div>
+          </div>
+          <div class="crow">
+            <span>Villes</span>
+            <div class="mini-sw"><div id="city-swatches"></div></div>
+          </div>
+        </div>
+
+        <h3 class="section">Carte</h3>
+        <div class="card">
+          <label class="row"><span>Afficher les destinations</span><input type="checkbox" class="switch" id="show-wish"></label>
+          <label class="row"><span>Rotation automatique</span><input type="checkbox" class="switch" id="autorotate"></label>
+          <div class="row"><span>Thème</span>
+            <div class="seg small" id="theme">
+              <button data-theme="auto">Auto</button>
+              <button data-theme="light">Clair</button>
+              <button data-theme="dark">Sombre</button>
+            </div>
+          </div>
         </div>
 
         <h3 class="section">Données</h3>
         <div class="card">
-          <button class="row" id="export"><span>Exporter mes données</span><span class="hint">JSON</span></button>
-          <button class="row" id="import"><span>Importer des données</span><span class="hint">JSON</span></button>
+          <button class="row" id="export"><span>Exporter</span><span class="hint">JSON</span></button>
+          <button class="row" id="import"><span>Importer</span><span class="hint">JSON</span></button>
           <input type="file" id="import-file" accept="application/json,.json" hidden>
           <button class="row danger" id="reset">Réinitialiser les pays visités</button>
         </div>
@@ -161,7 +155,7 @@
       <button class="pill active" data-filter="all">Tous</button>
       <button class="pill" data-filter="visited">Visités</button>
       <button class="pill" data-filter="todo">À découvrir</button>
-      <button class="pill" data-filter="wish">Envies</button>
+      <button class="pill" data-filter="wish">En projet</button>
     </div>
     <div class="scroll"><ul id="country-list" class="country-list"></ul></div>
   </section>
@@ -175,7 +169,7 @@
         <h3 id="sheet-name"></h3>
         <div class="badges" id="sheet-badges"></div>
       </div>
-      <button class="icon-btn wish-btn" id="wish-btn" aria-label="Envie d'y aller"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9.2-9A5 5 0 0 1 12 6a5 5 0 0 1 9.2 5C19 15.6 12 20 12 20z"/></svg></button>
+      <button class="icon-btn wish-btn" id="wish-btn" aria-label="Prochaine destination"><svg viewBox="0 0 24 24"><path d="M21 3 3 10.5l7 2.5 2.5 7L21 3z"/><path d="m10 13 4-4"/></svg></button>
       <button class="icon-btn" id="sheet-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
     <div class="sheet-full">

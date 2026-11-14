@@ -127,7 +127,7 @@
     const n = visitedCount();
     $$('[data-n]').forEach(el => { el.textContent = n; });
     $$('[data-total]').forEach(el => { el.textContent = TOTAL; });
-    $$('[data-counter-text]').forEach(el => { el.textContent = `${n} pays visités sur ${TOTAL}`; });
+    $$('[data-counter-text]').forEach(el => { el.textContent = `${n} pays visité${n > 1 ? 's' : ''} sur ${TOTAL}`; });
     renderPassport();
   }
 
@@ -695,12 +695,12 @@
     $('#wish-count').textContent = list.length ? ` · ${list.length}` : '';
     $('#wish-list').innerHTML = list.length
       ? list.map(c => `<button data-open="${c}"><img src="${flagSrc(c)}" alt=""><span>${esc(info(c).name)}</span><i class="dot wish"></i></button>`).join('')
-      : '<div class="empty">Touche ♡ sur la fiche d\'un pays pour l\'ajouter à tes envies.</div>';
+      : '<div class="empty">Touche ✈ sur la fiche d\'un pays pour préparer tes prochains voyages.</div>';
   }
   $('#wish-list').addEventListener('click', e => { const b = e.target.closest('[data-open]'); b && openSheet(b.dataset.open); });
   function toggleWish(code) {
-    if (isWish(code)) { delete state.wish[code]; toast(`${info(code).name} retiré de tes envies`); }
-    else { state.wish[code] = Date.now(); toast(`${info(code).name} ajouté à tes envies`); }
+    if (isWish(code)) { delete state.wish[code]; toast(`Plus en projet : ${info(code).name}`); }
+    else { state.wish[code] = Date.now(); toast(`✈ En projet : ${info(code).name}`); }
     if (navigator.vibrate) navigator.vibrate(10);
     save();
     renderWish();
@@ -806,7 +806,7 @@
     const nc = (state.cities[c.c] || []).length;
     const ico = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
     $('#sheet-badges').innerHTML = [
-      v ? `<span class="badge ok">${CHECK}Visité</span>` : isWish(c.c) ? '<span class="badge wish">♥ Envie d\'y aller</span>' : '<span class="badge">Pas encore visité</span>',
+      v ? `<span class="badge ok">${CHECK}Visité</span>` : isWish(c.c) ? '<span class="badge wish">✈ En projet</span>' : '<span class="badge">Pas encore visité</span>',
       y ? `<span class="badge">${ico('<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/>')}${y}</span>` : '',
       nc ? `<span class="badge">${ico('<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>')}${nc}</span>` : '',
       n ? `<span class="badge">${ico('<rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/>')}${n}</span>` : '',
