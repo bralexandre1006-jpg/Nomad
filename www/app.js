@@ -81,6 +81,7 @@
   }
   const HI = buildGeo(window.NOMAD_WORLD);
   const LO = buildGeo(window.NOMAD_WORLD110);
+  const MID = window.NOMAD_WORLDMID ? buildGeo(window.NOMAD_WORLDMID) : HI;
   const largestCenter = feats => {
     let best = null, area = -1;
     feats.forEach(f => {
@@ -288,7 +289,7 @@
     const g = { dirty: true, active: true, running: false, selected: null, dim: 0 };
     let W = 0, H = 0, dpr = 1, base = 1, zoom = 1;
     const rot = [-8, -38, 0];
-    let vel = [0, 0], lastInteract = 0, anim = null, hiPending = false, offY = 0;
+    let vel = [0, 0], lastInteract = 0, anim = null, hiPending = false, offY = 0, lod = 0;
 
     g.resize = () => {
       const r = canvas.getBoundingClientRect();
@@ -305,7 +306,11 @@
 
     function draw(fast) {
       // même niveau de détail à l'arrêt et en mouvement (pas de changement brusque) : choisi selon le zoom
-      const G = zoom < 4 ? LO : HI;
+      // 3 niveaux de détail selon le zoom, avec marge pour éviter les sauts en zoomant/dézoomant
+      const up = [3.6, 8], down = [3.1, 7];
+      if (lod < 2 && zoom > up[lod]) lod++;
+      if (lod > 0 && zoom < down[lod - 1]) lod--;
+      const G = [LO, MID, HI][lod];
       const R = radius(), X = W / 2, Y = cy();
       proj.translate([X, Y]).scale(R).rotate(rot).precision(0.7);
       const vc = proj.invert([X, Y]);
@@ -581,7 +586,7 @@
       anim = { t0: performance.now(), dur: 800, interp: d3.interpolate(from, target), z0: zoom, z1: Math.max(zoom, z), oy0: offY, oy1: offY };
     };
     g.unfocus = () => {
-      anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: Math.min(zoom, Math.max(1.3, zoom * 0.55)), oy0: offY, oy1: 0 };
+      anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: Math.min(zoom, 1.5), oy0: offY, oy1: 0 };
     };
     g.top = () => canvas.getBoundingClientRect().top;
     g.zoom = () => zoom;
