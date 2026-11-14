@@ -303,7 +303,7 @@ input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 8px; }
 #scrim.show { opacity: 1; pointer-events: auto; }
 #sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 21;
-  max-height: 86vh; display: flex; flex-direction: column;
+  max-height: 64vh; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column;
   background: var(--surface); border-radius: 28px 28px 0 0; border-top: 1px solid var(--line);
   box-shadow: 0 -10px 40px rgba(0,0,0,.35);
   padding: 0 calc(20px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(20px + var(--safe-left));
@@ -496,7 +496,9 @@ body.intro .map-bottom { opacity: 0; transform: translateY(24px); pointer-events
 button, a, input { touch-action: manipulation; }
 
 /* ---------- Villes ---------- */
-.city-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.city-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -20px; padding: 0 20px 2px; overscroll-behavior-x: contain; }
+.city-chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; white-space: nowrap; }
 .chip { display: inline-flex; align-items: center; border-radius: 999px; background: var(--surface-2); font-weight: 600; font-size: 14px; }
 .chip > button { display: inline-flex; align-items: center; gap: 8px; padding: 9px 4px 9px 12px; }
 .chip > button i { width: 9px; height: 9px; border-radius: 50%; background: var(--city); box-shadow: 0 0 0 2px rgba(0,0,0,.6); }

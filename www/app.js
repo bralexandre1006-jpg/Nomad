@@ -203,21 +203,31 @@
   function drawCities(ctx, project, r, labelsAll, selected, k = 1) {
     const codes = Object.keys(state.cities);
     if (!codes.length) return;
-    ctx.save();
-    ctx.font = `600 ${12 / k}px Outfit, system-ui, sans-serif`;
-    ctx.textBaseline = 'middle';
+    const fs = 10 / k, pad = 2 / k;
+    const boxes = [];
+    const pts = [];
     codes.forEach(code => (state.cities[code] || []).forEach(city => {
       const pt = project(city.c);
-      if (!pt) return;
+      if (pt) pts.push([pt, city.n, labelsAll || code === selected]);
+    }));
+    ctx.save();
+    pts.forEach(([pt]) => {
       ctx.beginPath(); ctx.arc(pt[0], pt[1], r, 0, Math.PI * 2);
       ctx.fillStyle = colors.city; ctx.fill();
-      ctx.lineWidth = 1.5 / k; ctx.strokeStyle = '#000'; ctx.stroke();
-      if (labelsAll || code === selected) {
-        const x = pt[0] + r + 4 / k;
-        ctx.lineWidth = 3 / k; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.strokeText(city.n, x, pt[1]);
-        ctx.fillStyle = '#fff'; ctx.fillText(city.n, x, pt[1]);
-      }
-    }));
+      ctx.lineWidth = 1 / k; ctx.strokeStyle = '#000'; ctx.stroke();
+    });
+    ctx.font = `600 ${fs}px Outfit, system-ui, sans-serif`;
+    ctx.textBaseline = 'middle';
+    pts.forEach(([pt, n, show]) => {
+      if (!show) return;
+      const w = ctx.measureText(n).width;
+      const x = pt[0] + r + 3 / k, y = pt[1];
+      const b = [x - pad, y - fs / 2 - pad, x + w + pad, y + fs / 2 + pad];
+      if (boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) return;
+      boxes.push(b);
+      ctx.lineWidth = 2.5 / k; ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.strokeText(n, x, y);
+      ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillText(n, x, y);
+    });
     ctx.restore();
   }
 
@@ -294,7 +304,7 @@
         } else { ctx.beginPath(); (G.byC.get(g.selected) || geo.feats).forEach(f => path(f)); ctx.stroke(); }
       }
 
-      drawCities(ctx, ll => (d3.geoDistance(ll, c) < Math.PI / 2 - 0.01 ? proj(ll) : null), Math.min(6, 3 + zoom * 0.25), zoom > 3.5, g.selected);
+      drawCities(ctx, ll => (d3.geoDistance(ll, c) < Math.PI / 2 - 0.01 ? proj(ll) : null), Math.min(3.5, 2.2 + zoom * 0.1), zoom > 3.5, g.selected);
 
       const shade = ctx.createRadialGradient(X - R * 0.3, Y - R * 0.35, R * 0.15, X, Y, R);
       shade.addColorStop(0, 'rgba(255, 255, 255, .07)');
@@ -527,7 +537,7 @@
         ctx.beginPath(); ctx.arc(x, y, v ? rv : rv * 0.65, 0, Math.PI * 2);
         ctx.fillStyle = v ? colors.accent : colors.land; ctx.fill();
       });
-      if (interactive) drawCities(ctx, ll => proj(ll), 3.2 / t.k, t.k > 4, m.selected, t.k);
+      if (interactive) drawCities(ctx, ll => proj(ll), 2.4 / t.k, t.k > 4, m.selected, t.k);
       else drawCities(ctx, ll => proj(ll), 1.6, false, null);
       if (m.selected) {
         ctx.lineWidth = 2 / t.k; ctx.strokeStyle = colors.brand;
@@ -981,9 +991,9 @@
   function renderCities() {
     const list = state.cities[sheet.code] || [];
     $('#city-count').textContent = list.length ? `${list.length} ville${list.length > 1 ? 's' : ''}` : '';
-    $('#city-chips').innerHTML = list.map((c, i) =>
-      `<span class="chip"><button data-ci="${i}"><i></i>${esc(c.n)}</button><button class="x" data-del="${i}" aria-label="Retirer ${esc(c.n)}">×</button></span>`).join('')
-      + '<button class="chip add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Ajouter une ville</button>';
+    $('#city-chips').innerHTML = '<button class="chip add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Ajouter</button>'
+      + list.map((c, i) =>
+      `<span class="chip"><button data-ci="${i}"><i></i>${esc(c.n)}</button><button class="x" data-del="${i}" aria-label="Retirer ${esc(c.n)}">×</button></span>`).join('');
   }
   $('#city-chips').addEventListener('click', async e => {
     const code = sheet.code, list = state.cities[code] || [];
