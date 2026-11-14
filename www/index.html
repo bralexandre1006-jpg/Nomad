@@ -205,10 +205,20 @@
       <div class="highlights">
         <button class="hl" id="hl-open"><span class="hl-ring"><svg id="hl-shape" viewBox="0 0 100 100"></svg></span><small id="hl-label"></small></button>
         <button class="hl" id="add-photo"><span class="hl-ring add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><small>Ajouter</small></button>
+        <button class="hl" id="open-gallery" hidden><span class="hl-ring add grid"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><small>Galerie</small></button>
       </div>
     </div>
     <button class="sheet-expand" id="sheet-expand"><span>Plus d'options</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
     <input type="file" id="file" accept="image/*,video/*" multiple hidden>
+  </section>
+
+  <section id="gallery" aria-hidden="true">
+    <div class="gal-top">
+      <button class="icon-btn" id="gal-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+      <div class="gal-title"><b id="gal-name"></b><small id="gal-count"></small></div>
+      <button class="icon-btn" id="gal-add" aria-label="Ajouter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+    <div class="scroll" id="gal-scroll"><div id="gal-grid"></div></div>
   </section>
 
   <div id="viewer" aria-hidden="true">

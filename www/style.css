@@ -699,3 +699,28 @@ button, a, input { touch-action: manipulation; }
 .sec-del { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: var(--surface-2); }
 .sec-del svg { width: 15px; height: 15px; }
 .sec-del:active { color: #F0605A; }
+
+/* ---------- Galerie ---------- */
+#sheet .hl-ring.grid svg { width: 22px; height: 22px; stroke: var(--ink); }
+#sheet .hl-ring.grid { border-style: solid; border-color: var(--line); background: var(--surface-2); }
+#gallery {
+  position: fixed; inset: 0; z-index: 28; background: var(--bg); display: flex; flex-direction: column;
+  padding: calc(var(--safe-top) + 8px) var(--safe-right) 0 var(--safe-left);
+  opacity: 0; pointer-events: none; transform: translateX(30px); transition: opacity .25s var(--ease), transform .3s var(--ease);
+}
+#gallery.show { opacity: 1; pointer-events: auto; transform: none; }
+.gal-top { display: flex; align-items: center; gap: 12px; padding: 4px 14px 10px; }
+.gal-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gal-title b { font-size: 20px; font-weight: 700; }
+.gal-title small { color: var(--muted); font-size: 12px; }
+#gal-scroll { padding: 0 2px calc(var(--safe-bottom) + 20px); }
+.gal-month { margin: 14px 12px 8px; font-size: 12px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+.gal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+.gal-item { position: relative; aspect-ratio: 1; overflow: hidden; background: var(--surface-2); }
+.gal-item img, .gal-item video { width: 100%; height: 100%; object-fit: cover; display: block; animation: fade .3s var(--ease); pointer-events: none; }
+.gal-item.video i {
+  position: absolute; right: 6px; bottom: 6px; width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(0,0,0,.55) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 7l8 5-8 5z' fill='white'/%3E%3C/svg%3E") center/16px no-repeat;
+}
+.gal-item:active { opacity: .7; }
+@keyframes fade { from { opacity: 0; } }

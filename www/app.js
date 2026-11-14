@@ -948,6 +948,8 @@
     $('#hl-label').textContent = n ? c.name : 'Vide';
     $('#hl-open').classList.toggle('is-empty', !n);
     $('#album-clear').hidden = !n;
+    $('#open-gallery').hidden = !n;
+    if (galleryOpen()) renderGallery();
   }
 
   const outlineCache = new Map();
@@ -1157,6 +1159,51 @@
   })();
 
   $('#add-photo').onclick = () => $('#file').click();
+
+  /* ---------- Galerie ---------- */
+  const galleryOpen = () => $('#gallery').classList.contains('show');
+  const galUrls = [];
+  const MONTHS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  async function renderGallery() {
+    const list = sheet.photos;
+    $('#gal-name').textContent = info(sheet.code).name;
+    $('#gal-count').textContent = $('#album-count').textContent;
+    galUrls.splice(0).forEach(u => u.startsWith('blob:') && URL.revokeObjectURL(u));
+    let html = '', last = '';
+    list.forEach((p, i) => {
+      const d = new Date(p.date), key = `${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`;
+      if (key !== last) { if (last) html += '</div>'; html += `<h4 class="gal-month">${key}</h4><div class="gal-grid">`; last = key; }
+      html += `<button class="gal-item${p.type === 'video' ? ' video' : ''}" data-gi="${i}"></button>`;
+    });
+    if (last) html += '</div>';
+    $('#gal-grid').innerHTML = html || '<p class="empty">Album vide</p>';
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i], el = $(`#gal-grid [data-gi="${i}"]`);
+      if (!el) continue;
+      let u;
+      try { u = await photoSrc(p); } catch { continue; }
+      if (!galleryOpen() || sheet.photos !== list) return;
+      galUrls.push(u);
+      el.innerHTML = p.type === 'video'
+        ? `<video src="${u}#t=0.1" muted playsinline preload="metadata"></video><i></i>`
+        : `<img src="${u}" alt="" loading="lazy" decoding="async">`;
+    }
+  }
+  function openGallery() {
+    $('#gallery').classList.add('show');
+    $('#gallery').setAttribute('aria-hidden', 'false');
+    $('#gal-scroll').scrollTop = 0;
+    renderGallery();
+  }
+  function closeGallery() {
+    $('#gallery').classList.remove('show');
+    $('#gallery').setAttribute('aria-hidden', 'true');
+    setTimeout(() => { if (!galleryOpen()) { $('#gal-grid').innerHTML = ''; galUrls.splice(0).forEach(u => u.startsWith('blob:') && URL.revokeObjectURL(u)); } }, 300);
+  }
+  $('#open-gallery').onclick = openGallery;
+  $('#gal-close').onclick = closeGallery;
+  $('#gal-add').onclick = () => $('#file').click();
+  $('#gal-grid').addEventListener('click', e => { const b = e.target.closest('[data-gi]'); if (b) openViewer(+b.dataset.gi); });
   $('#album-clear').onclick = async () => {
     const code = sheet.code, list = sheet.photos.slice();
     if (!list.length) return;
@@ -1690,6 +1737,7 @@
       if ($('#onboard').classList.contains('show')) { if (!onboardFirst) closeOnboard(); return; }
       if ($('#years').classList.contains('show')) return yearResolve ? closeYears(undefined) : hideModal();
       if (story.open) return closeViewer();
+      if (galleryOpen()) return closeGallery();
       if ($('#citypick').classList.contains('show')) return closeCityPick();
       if (placing) return stopPlacing();
       if (finderOpen()) return closeFinder();
