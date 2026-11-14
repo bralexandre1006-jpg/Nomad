@@ -560,3 +560,54 @@ button, a, input { touch-action: manipulation; }
 #sheet .chip .x { padding: 7px 11px 7px 5px; }
 #sheet .chip.add { padding: 7px 12px; font-size: 13px; }
 #sheet .grab { padding: 8px 0 4px; }
+
+/* ---------- Fiche pays v2 ---------- */
+#sheet {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, #fff 3%) 0%, var(--surface) 60%);
+  box-shadow: 0 -18px 50px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .07);
+  border-top: 0;
+}
+#sheet .grab span { width: 36px; height: 4px; background: rgba(255, 255, 255, .22); }
+#sheet .sheet-head { align-items: center; padding: 4px 0 14px; gap: 14px; }
+.flag-wrap {
+  width: 58px; height: 58px; border-radius: 18px; flex: none; display: grid; place-items: center;
+  background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line);
+}
+#sheet #sheet-flag { width: 38px; height: 28px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.sheet-title { flex: 1; min-width: 0; }
+#sheet #sheet-name { font-size: 24px; letter-spacing: -.6px; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.badge svg { width: 13px; height: 13px; stroke-width: 2; opacity: .75; }
+.badge.ok { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.badge.ok svg { opacity: 1; stroke-width: 3; }
+.badge.muted { color: var(--muted); }
+#sheet .icon-btn { width: 36px; height: 36px; align-self: flex-start; }
+.sec { padding: 14px 0 2px; border-top: 1px solid var(--line); }
+.sec + .sec { margin-top: 2px; }
+.sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.sec-head h4 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); }
+.sec-add { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--city); padding: 4px 2px; }
+.sec-add svg { width: 15px; height: 15px; stroke-width: 2.4; }
+.sec-count { font-size: 12px; color: var(--muted); }
+.sec-empty { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
+#sheet .city-chips { margin-bottom: 4px; }
+#sheet .chip { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+#sheet .highlights { padding-bottom: 4px; }
+.sheet-full { padding-bottom: 12px; }
+#sheet .visit-btn { padding: 13px; border-radius: 14px; font-size: 15px; }
+#sheet .year-row { border-radius: 14px; padding: 12px 14px; }
+#sheet .year-row span { display: inline-flex; align-items: center; gap: 8px; }
+#sheet .year-row svg { width: 17px; height: 17px; opacity: .7; }
+.sheet-expand {
+  display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%;
+  margin-top: 8px; padding: 8px; color: var(--muted); font-size: 12px; font-weight: 600;
+}
+.sheet-expand svg { width: 16px; height: 16px; transition: transform .3s var(--ease); }
+#sheet.peek .sheet-expand svg { transform: rotate(180deg); }
+#sheet:not(.peek) .sheet-expand span { font-size: 0; }
+#sheet:not(.peek) .sheet-expand span::after { content: "Réduire"; font-size: 12px; }
+#sheet .sheet-head > .flag-wrap { flex: 0 0 58px; }

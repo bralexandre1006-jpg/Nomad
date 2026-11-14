@@ -771,8 +771,15 @@
     const y = state.years[c.c];
     $('#sheet-flag').src = flagSrc(c.c);
     $('#sheet-name').textContent = c.name;
-    const parent = SUBMAP.has(c.c) ? ` · ${c.g ? c.g + ', ' : ''}${byCode.get(c.p).name}` : '';
-    $('#sheet-sub').textContent = (v ? (y ? `Visité · première visite en ${y}` : 'Visité') : 'Pas encore visité') + parent;
+    const nc = (state.cities[c.c] || []).length;
+    const ico = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
+    $('#sheet-badges').innerHTML = [
+      v ? `<span class="badge ok">${CHECK}Visité</span>` : '<span class="badge">Pas encore visité</span>',
+      y ? `<span class="badge">${ico('<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/>')}${y}</span>` : '',
+      nc ? `<span class="badge">${ico('<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>')}${nc}</span>` : '',
+      n ? `<span class="badge">${ico('<rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/>')}${n}</span>` : '',
+      SUBMAP.has(c.c) ? `<span class="badge muted">${esc(c.g || byCode.get(c.p).name)}</span>` : ''
+    ].join('');
     const btn = $('#visit-btn');
     btn.classList.toggle('on', v);
     btn.innerHTML = v ? `${CHECK}<span>Visité</span>` : '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Marquer comme visité</span>';
@@ -1081,14 +1088,15 @@
 
   /* ---------- Villes ---------- */
   function renderCities() {
+    if (sheet.code) renderSheetHead();
     const list = state.cities[sheet.code] || [];
     const n = list.length;
-    $('#sheet-cities').textContent = '';
-    $('#city-count').textContent = n ? `${n} ville${n > 1 ? 's' : ''}` : '';
-    $('#city-cards').innerHTML = '<button class="chip add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Ajouter</button>'
+    $('#city-cards').innerHTML = (n ? '' : '<p class="sec-empty">Aucune ville pour l\'instant</p>')
       + list.map((c, i) =>
       `<span class="chip${i === activeCity ? ' on' : ''}" data-ci="${i}"><button><i></i>${esc(c.n)}</button><button class="x" data-del="${i}" aria-label="Retirer ${esc(c.n)}">×</button></span>`).join('');
   }
+  $('#city-add').onclick = () => openCityPick(sheet.code);
+  $('#sheet-expand').onclick = () => toggleFull(sheetEl.classList.contains('peek'));
   function goCity(i, scroll) {
     const list = state.cities[sheet.code] || [];
     if (!list[i]) return;
@@ -1101,7 +1109,6 @@
   }
   $('#city-cards').addEventListener('click', async e => {
     const code = sheet.code, list = state.cities[code] || [];
-    if (e.target.closest('#city-add')) return openCityPick(code);
     const d = e.target.closest('[data-del]');
     if (d) {
       const c = list[+d.dataset.del];

@@ -156,31 +156,35 @@
   <section id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-name">
     <div class="grab"><span></span></div>
     <div class="sheet-head">
-      <img id="sheet-flag" alt="">
-      <div>
+      <div class="flag-wrap"><img id="sheet-flag" alt=""></div>
+      <div class="sheet-title">
         <h3 id="sheet-name"></h3>
-        <p id="sheet-sub"></p>
+        <div class="badges" id="sheet-badges"></div>
       </div>
-      <span class="sheet-more" aria-hidden="true"><span id="sheet-cities"></span><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></span>
       <button class="icon-btn" id="sheet-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
     <div class="sheet-full">
       <button id="visit-btn" class="visit-btn"></button>
-      <button class="year-row" id="year-row" hidden><span>Première visite</span><b id="year-value"></b></button>
+      <button class="year-row" id="year-row" hidden><span><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Première visite</span><b id="year-value"></b></button>
     </div>
-    <div class="album-head first">
-      <h4>Villes</h4>
-      <span id="city-count"></span>
+    <div class="sec">
+      <div class="sec-head">
+        <h4>Villes</h4>
+        <button class="sec-add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Ajouter</button>
+      </div>
+      <div class="city-chips" id="city-cards"></div>
     </div>
-    <div class="city-chips" id="city-cards"></div>
-    <div class="album-head">
-      <h4>Album</h4>
-      <span id="album-count"></span>
+    <div class="sec">
+      <div class="sec-head">
+        <h4>Album</h4>
+        <span class="sec-count" id="album-count"></span>
+      </div>
+      <div class="highlights">
+        <button class="hl" id="hl-open"><span class="hl-ring"><svg id="hl-shape" viewBox="0 0 100 100"></svg></span><small id="hl-label"></small></button>
+        <button class="hl" id="add-photo"><span class="hl-ring add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><small>Ajouter</small></button>
+      </div>
     </div>
-    <div class="highlights">
-      <button class="hl" id="hl-open"><span class="hl-ring"><svg id="hl-shape" viewBox="0 0 100 100"></svg></span><small id="hl-label"></small></button>
-      <button class="hl" id="add-photo"><span class="hl-ring add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><small>Ajouter</small></button>
-    </div>
+    <button class="sheet-expand" id="sheet-expand"><span>Plus d'options</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
     <input type="file" id="file" accept="image/*" multiple hidden>
   </section>
 
