@@ -58,11 +58,26 @@
       groups.forEach((polys, k) => add({ type: 'Feature', id: f.id, code: k, properties: {}, geometry: { type: 'MultiPolygon', coordinates: polys } }));
     });
     const ip = (a, b) => (a.id === '376' && b.id === '275') || (a.id === '275' && b.id === '376');
-    return {
-      byC,
-      land: topojson.feature(topo, topo.objects.land),
-      borders: topojson.mesh(topo, obj, (a, b) => a !== b && !ip(a, b))
+    const land = topojson.feature(topo, topo.objects.land);
+    const borders = topojson.mesh(topo, obj, (a, b) => a !== b && !ip(a, b));
+    // découpage en morceaux avec centre/rayon pour ne dessiner que la face visible du globe
+    const cull = g => {
+      const c = d3.geoCentroid(g); let r = 0;
+      const walk = co => { if (typeof co[0] === 'number') r = Math.max(r, d3.geoDistance(c, co)); else co.forEach(walk); };
+      walk(g.coordinates);
+      return { c, r };
     };
+    const landParts = [];
+    (land.features || [land]).forEach(f => {
+      const g = f.geometry;
+      (g.type === 'MultiPolygon' ? g.coordinates : [g.coordinates]).forEach(poly => {
+        const pg = { type: 'Polygon', coordinates: poly };
+        landParts.push({ g: pg, ...cull(pg) });
+      });
+    });
+    const borderParts = borders.coordinates.map(line => { const g = { type: 'LineString', coordinates: line }; return { g, ...cull(g) }; });
+    byC.forEach(list => list.forEach(f => { f._ci = cull(f.geometry); }));
+    return { byC, land, borders, landParts, borderParts };
   }
   const HI = buildGeo(window.NOMAD_WORLD);
   const LO = buildGeo(window.NOMAD_WORLD110);
@@ -287,9 +302,13 @@
     const clampLat = v => Math.max(-85, Math.min(85, v));
 
     function draw(fast) {
-      const G = fast ? LO : HI;
+      // même niveau de détail à l'arrêt et en mouvement (pas de changement brusque) : choisi selon le zoom
+      const G = zoom < 4 ? LO : HI;
       const R = radius(), X = W / 2, Y = cy();
-      proj.translate([X, Y]).scale(R).rotate(rot).precision(fast ? 1.6 : 0.5);
+      proj.translate([X, Y]).scale(R).rotate(rot).precision(0.7);
+      const vc = proj.invert([X, Y]);
+      const va = Math.asin(Math.min(1, Math.hypot(W, H) / 2 / R)) + 0.03;
+      const seen = o => d3.geoDistance(o.c, vc) - o.r < va;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
@@ -307,17 +326,17 @@
 
       ctx.beginPath(); path(grat); ctx.strokeStyle = colors.graticule; ctx.lineWidth = 0.7; ctx.stroke();
 
-      ctx.beginPath(); path(G.land); ctx.fillStyle = colors.land; ctx.fill();
+      ctx.beginPath(); G.landParts.forEach(o => seen(o) && path(o.g)); ctx.fillStyle = colors.land; ctx.fill();
       const wl = wishGeo();
       if (wl.length) {
         ctx.beginPath();
-        wl.forEach(code => (G.byC.get(code) || []).forEach(f => path(f)));
+        wl.forEach(code => (G.byC.get(code) || []).forEach(f => seen(f._ci) && path(f)));
         ctx.fillStyle = colors.wish; ctx.fill();
       }
       ctx.beginPath();
-      visitedGeo().forEach(code => (G.byC.get(code) || []).forEach(f => path(f)));
+      visitedGeo().forEach(code => (G.byC.get(code) || []).forEach(f => seen(f._ci) && path(f)));
       ctx.fillStyle = colors.accent; ctx.fill();
-      ctx.beginPath(); path(G.borders); ctx.strokeStyle = colors.border; ctx.lineWidth = 0.6; ctx.lineJoin = 'round'; ctx.stroke();
+      ctx.beginPath(); G.borderParts.forEach(o => seen(o) && path(o.g)); ctx.strokeStyle = colors.border; ctx.lineWidth = 0.6; ctx.lineJoin = 'round'; ctx.stroke();
 
       const c = proj.invert([X, Y]);
       SMALL.forEach(code => {
