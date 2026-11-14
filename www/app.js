@@ -1325,7 +1325,177 @@
   $('#open-gallery').onclick = openGallery;
   $('#gal-close').onclick = closeGallery;
   $('#gal-add').onclick = () => startImport();
-  $('#gal-grid').addEventListener('click', e => { const b = e.target.closest('[data-gi]'); if (b) openViewer(+b.dataset.gi); });
+  $('#gal-grid').addEventListener('click', e => { const b = e.target.closest('[data-gi]'); if (b) openPhoto(+b.dataset.gi); });
+
+  /* ---------- Visionneuse façon pellicule (zoom, glisser, partager) ---------- */
+  const pv = { open: false, i: 0, urls: {}, scale: 1, tx: 0, ty: 0 };
+  const pvEl = $('#pviewer'), pvTrack = $('#pv-track');
+  const pvOpen = () => pv.open;
+  async function pvUrl(p) {
+    if (!pv.urls[p.id]) pv.urls[p.id] = await photoSrc(p);
+    return pv.urls[p.id];
+  }
+  function openPhoto(i) {
+    pv.open = true;
+    pvEl.classList.add('show');
+    pvEl.setAttribute('aria-hidden', 'false');
+    pvGo(i, false);
+  }
+  function closePhoto() {
+    pv.open = false;
+    sheet.openedAt = performance.now();
+    pvEl.classList.remove('show');
+    pvEl.setAttribute('aria-hidden', 'true');
+    $$('video', pvTrack).forEach(v => v.pause());
+    setTimeout(() => {
+      if (pv.open) return;
+      pvTrack.innerHTML = '';
+      Object.values(pv.urls).forEach(u => u.startsWith('blob:') && URL.revokeObjectURL(u));
+      pv.urls = {};
+    }, 300);
+  }
+  async function pvSlide(k) {
+    const p = sheet.photos[k];
+    const d = document.createElement('div');
+    d.className = 'pv-slide';
+    d.dataset.k = k;
+    if (!p) return d;
+    const u = await pvUrl(p).catch(() => '');
+    d.innerHTML = p.type === 'video'
+      ? `<video src="${u}" controls playsinline preload="metadata" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>`
+      : `<img src="${u}" alt="" draggable="false">`;
+    return d;
+  }
+  async function pvGo(i, animate = true) {
+    const n = sheet.photos.length;
+    if (!n) return closePhoto();
+    pv.i = Math.max(0, Math.min(n - 1, i));
+    pvReset();
+    const slides = await Promise.all([pv.i - 1, pv.i, pv.i + 1].map(pvSlide));
+    if (!pv.open) return;
+    $$('video', pvTrack).forEach(v => v.pause());
+    pvTrack.innerHTML = '';
+    slides.forEach(s => pvTrack.appendChild(s));
+    pvTrack.style.transition = 'none';
+    pvTrack.style.transform = 'translateX(-100vw)';
+    const p = sheet.photos[pv.i];
+    const d = new Date(p.date);
+    $('#pv-date').textContent = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    $('#pv-time').textContent = `${info(sheet.code).name} · ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+    $('#pv-count').textContent = `${pv.i + 1} / ${n}`;
+  }
+  const curMedia = () => pvTrack.children[1] && pvTrack.children[1].firstElementChild;
+  function pvApply(anim) {
+    const m = curMedia();
+    if (!m || m.tagName !== 'IMG') return;
+    m.style.transition = anim ? 'transform .25s cubic-bezier(.2,.8,.2,1)' : 'none';
+    m.style.transform = `translate(${pv.tx}px, ${pv.ty}px) scale(${pv.scale})`;
+  }
+  function pvReset() { pv.scale = 1; pv.tx = 0; pv.ty = 0; pvApply(true); }
+  (() => {
+    const pts = new Map();
+    let g = null, lastTap = 0;
+    pvTrack.addEventListener('pointerdown', e => {
+      if (e.target.tagName === 'VIDEO' && e.clientY > window.innerHeight - 90) return;
+      pvTrack.setPointerCapture(e.pointerId);
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) g = { mode: null, x0: e.clientX, y0: e.clientY, tx0: pv.tx, ty0: pv.ty, t: performance.now(), moved: false };
+      else if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        g = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), s0: pv.scale, tx0: pv.tx, ty0: pv.ty, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+      }
+    });
+    pvTrack.addEventListener('pointermove', e => {
+      const q = pts.get(e.pointerId);
+      if (!q || !g) return;
+      q.x = e.clientX; q.y = e.clientY;
+      if (g.mode === 'pinch' && pts.size >= 2) {
+        const [a, b] = [...pts.values()];
+        const ns = Math.max(1, Math.min(6, g.s0 * Math.hypot(a.x - b.x, a.y - b.y) / g.d0));
+        const W = window.innerWidth / 2, H = window.innerHeight / 2;
+        pv.tx = (g.cx - W) - (g.cx - W - g.tx0) * ns / g.s0;
+        pv.ty = (g.cy - H) - (g.cy - H - g.ty0) * ns / g.s0;
+        pv.scale = ns;
+        pvApply(false);
+        return;
+      }
+      const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
+      if (!g.mode && Math.hypot(dx, dy) > 8) g.mode = pv.scale > 1.02 ? 'pan' : Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'down';
+      if (g.mode) g.moved = true;
+      if (g.mode === 'pan') { pv.tx = g.tx0 + dx; pv.ty = g.ty0 + dy; pvApply(false); }
+      else if (g.mode === 'swipe') {
+        const edge = (pv.i === 0 && dx > 0) || (pv.i === sheet.photos.length - 1 && dx < 0);
+        pvTrack.style.transition = 'none';
+        pvTrack.style.transform = `translateX(calc(-100vw + ${dx * (edge ? 0.3 : 1)}px))`;
+      } else if (g.mode === 'down' && dy > 0) {
+        pvEl.style.setProperty('--pull', Math.min(1, dy / 400));
+        pvTrack.style.transform = `translateX(-100vw) translateY(${dy}px) scale(${1 - Math.min(0.25, dy / 1600)})`;
+      }
+    });
+    const end = e => {
+      if (!pts.has(e.pointerId)) return;
+      pts.delete(e.pointerId);
+      if (!g) return;
+      if (g.mode === 'pinch') {
+        if (pts.size === 0) { if (pv.scale < 1.05) pvReset(); g = null; }
+        else { const [q] = [...pts.values()]; g = { mode: 'pan', x0: q.x, y0: q.y, tx0: pv.tx, ty0: pv.ty, moved: true }; }
+        return;
+      }
+      if (pts.size) return;
+      const dx = e.clientX - g.x0, dy = e.clientY - g.y0, W = window.innerWidth;
+      if (g.mode === 'swipe') {
+        pvTrack.style.transition = 'transform .28s cubic-bezier(.2,.8,.2,1)';
+        const dir = dx < -W * 0.18 && pv.i < sheet.photos.length - 1 ? 1 : dx > W * 0.18 && pv.i > 0 ? -1 : 0;
+        pvTrack.style.transform = `translateX(${-100 - dir * 100}vw)`;
+        if (dir) setTimeout(() => pvGo(pv.i + dir), 280);
+      } else if (g.mode === 'down') {
+        pvEl.style.removeProperty('--pull');
+        if (dy > 120) closePhoto();
+        else { pvTrack.style.transition = 'transform .25s cubic-bezier(.2,.8,.2,1)'; pvTrack.style.transform = 'translateX(-100vw)'; }
+      } else if (!g.moved) {
+        const now = performance.now();
+        if (now - lastTap < 300) {
+          lastTap = 0;
+          if (pv.scale > 1.02) pvReset();
+          else {
+            const s2 = 2.6, Wc = W / 2, Hc = window.innerHeight / 2;
+            pv.tx = (Wc - e.clientX) * (s2 - 1); pv.ty = (Hc - e.clientY) * (s2 - 1); pv.scale = s2; pvApply(true);
+          }
+        } else {
+          lastTap = now;
+          setTimeout(() => { if (lastTap === now) pvEl.classList.toggle('chrome-off'); }, 300);
+        }
+      }
+      g = null;
+    };
+    pvTrack.addEventListener('pointerup', end);
+    pvTrack.addEventListener('pointercancel', end);
+  })();
+  $('#pv-close').onclick = closePhoto;
+  $('#pv-story').onclick = () => { const i = pv.i; closePhoto(); setTimeout(() => openViewer(i), 200); };
+  $('#pv-share').onclick = async () => {
+    const p = sheet.photos[pv.i];
+    if (!p) return;
+    try {
+      if (p.file && Plugins.Share) {
+        const { uri } = await FSP.getUri({ path: p.file, directory: 'DATA' });
+        await Plugins.Share.share({ files: [uri], dialogTitle: 'Partager' });
+      } else if (navigator.share && p.blob) {
+        await navigator.share({ files: [new File([p.blob], p.type === 'video' ? 'video.mp4' : 'photo.jpg', { type: p.blob.type })] });
+      } else toast('Partage indisponible');
+    } catch (e) { if (!/cancel|abort/i.test(String(e && (e.message || e.name)))) toast('Partage impossible'); }
+  };
+  $('#pv-delete').onclick = async () => {
+    const p = sheet.photos[pv.i];
+    if (!p || !await ask('Supprimer ce souvenir ?', 'Supprimer')) return;
+    try { await deletePhoto(p); } catch { return toast('Suppression impossible'); }
+    photoCounts[sheet.code] = Math.max(0, (photoCounts[sheet.code] || 1) - 1);
+    renderPhotoCounts();
+    const i = pv.i;
+    await loadAlbum();
+    if (!sheet.photos.length) return closePhoto();
+    pvGo(Math.min(i, sheet.photos.length - 1), false);
+  };
   $('#album-clear').onclick = async () => {
     const code = sheet.code, list = sheet.photos.slice();
     if (!list.length) return;
@@ -1620,7 +1790,7 @@
   const sVid = $('#story-video');
   function openViewer(i) {
     story.open = true;
-    $('#story-bars').innerHTML = sheet.photos.map(() => '<i><b></b></i>').join('');
+    buildBars();
     $('#story-shape').innerHTML = shapeSVG(sheet.code);
     $('#story-name').textContent = info(sheet.code).name;
     $('#viewer').classList.add('show');
@@ -1661,19 +1831,35 @@
     const nx = sheet.photos[story.i + 1];
     if (nx && nx.type !== 'video') urlFor(story.i + 1).then(u => { if (u) new Image().src = u; }).catch(() => {});
     $('#story-date').textContent = new Date(p.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-    $$('#story-bars b').forEach((b, k) => { b.style.width = k < story.i ? '100%' : '0%'; });
+    if (sheet.photos.length > MANY) setBar(0);
+    else $$('#story-bars b').forEach((b, k) => { b.style.width = k < story.i ? '100%' : '0%'; });
   }
   function progress() {
     if (!story.ready) return 0;
     return story.elapsed + (story.paused ? 0 : performance.now() - story.t0);
+  }
+  const MANY = 15;
+  function buildBars() {
+    const n = sheet.photos.length;
+    $('#story-bars').classList.toggle('one', n > MANY);
+    $('#story-bars').innerHTML = n > MANY ? '<i><b></b></i><span id="story-num"></span>' : sheet.photos.map(() => '<i><b></b></i>').join('');
+  }
+  function setBar(k) {
+    const n = sheet.photos.length;
+    if (n > MANY) {
+      $('#story-bars b').style.width = ((story.i + k) / n) * 100 + '%';
+      $('#story-num').textContent = `${story.i + 1} / ${n}`;
+    } else {
+      const bar = $$('#story-bars b')[story.i];
+      if (bar) bar.style.width = k * 100 + '%';
+    }
   }
   function storyLoop() {
     if (!story.open) return;
     const k = story.video
       ? (story.ready && sVid.duration ? Math.min(1, sVid.currentTime / sVid.duration) : 0) + (sVid.ended ? 1 : 0)
       : Math.min(1, progress() / DUR);
-    const bar = $$('#story-bars b')[story.i];
-    if (bar) bar.style.width = k * 100 + '%';
+    setBar(k);
     if (k >= 1) goStory(story.i + 1);
     requestAnimationFrame(storyLoop);
   }
@@ -1704,7 +1890,7 @@
     const i = story.i;
     await loadAlbum();
     if (!sheet.photos.length) return closeViewer();
-    $('#story-bars').innerHTML = sheet.photos.map(() => '<i><b></b></i>').join('');
+    buildBars();
     goStory(Math.min(i, sheet.photos.length - 1));
   };
   (() => {
@@ -1900,6 +2086,7 @@
       if ($('#onboard').classList.contains('show')) { if (!onboardFirst) closeOnboard(); return; }
       if ($('#years').classList.contains('show')) return yearResolve ? closeYears(undefined) : hideModal();
       if (story.open) return closeViewer();
+      if (pvOpen()) return closePhoto();
       if (galleryOpen()) return closeGallery();
       if ($('#citypick').classList.contains('show')) return closeCityPick();
       if (placing) return stopPlacing();
@@ -1980,7 +2167,7 @@
       const spin = d3.interpolate(from, target);
       const name = $('#intro-name');
       name.getAnimations().forEach(a => a.cancel());
-      name.innerHTML = 'NOMAD'.split('').map((l, i) => `<span style="--i:${i}">${l}</span>`).join('');
+      name.innerHTML = '<div class="iw">' + 'NOMAD'.split('').map((l, i) => `<span style="--i:${i}">${l}</span>`).join('') + '</div><i class="il"></i><small>Ton monde, pays après pays</small>';
       await run(1700, (e, k) => {
         const appear = d3.easeBackOut.overshoot(1.3)(Math.min(1, k / 0.25));
         draw(spin(e), Math.max(0.01, appear), Math.min(1, k / 0.15), Math.max(0, (k - 0.7) / 0.3), true);

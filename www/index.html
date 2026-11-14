@@ -212,6 +212,20 @@
     <input type="file" id="file" accept="image/*,video/*" multiple hidden>
   </section>
 
+  <section id="pviewer" aria-hidden="true">
+    <div class="pv-top">
+      <button class="pv-btn" id="pv-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+      <div class="pv-title"><b id="pv-date"></b><small id="pv-time"></small></div>
+      <span class="pv-count" id="pv-count"></span>
+    </div>
+    <div id="pv-track"></div>
+    <div class="pv-bottom">
+      <button class="pv-btn" id="pv-share" aria-label="Partager"><svg viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></button>
+      <button class="pv-btn" id="pv-story" aria-label="Lire en story"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5z"/></svg></button>
+      <button class="pv-btn" id="pv-delete" aria-label="Supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+    </div>
+  </section>
+
   <section id="gallery" aria-hidden="true">
     <div class="gal-top">
       <button class="icon-btn" id="gal-close" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
