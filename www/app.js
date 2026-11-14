@@ -479,7 +479,7 @@
       lastInteract = performance.now();
       if (pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
-        if (gesture.d0) zoom = Math.max(0.75, Math.min(10, gesture.z0 * Math.hypot(a.x - b.x, a.y - b.y) / gesture.d0));
+        if (gesture.d0) zoom = Math.max(0.75, Math.min(40, gesture.z0 * Math.hypot(a.x - b.x, a.y - b.y) / gesture.d0));
         g.dirty = true;
         return;
       }
@@ -510,7 +510,7 @@
     canvas.addEventListener('pointercancel', end);
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
-      zoom = Math.max(0.75, Math.min(10, zoom * Math.exp(-e.deltaY * 0.0015)));
+      zoom = Math.max(0.75, Math.min(40, zoom * Math.exp(-e.deltaY * 0.0015)));
       lastInteract = performance.now();
       g.dirty = true;
     }, { passive: false });
@@ -586,7 +586,7 @@
       anim = { t0: performance.now(), dur: 800, interp: d3.interpolate(from, target), z0: zoom, z1: Math.max(zoom, z), oy0: offY, oy1: offY };
     };
     g.unfocus = () => {
-      anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: Math.min(zoom, 1.5), oy0: offY, oy1: 0 };
+      anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: Math.min(zoom, 1.15), oy0: offY, oy1: 0 };
     };
     g.top = () => canvas.getBoundingClientRect().top;
     g.zoom = () => zoom;
@@ -630,7 +630,7 @@
         const b = path.bounds({ type: 'Sphere' });
         const mapH = b[1][1] - b[0][1];
         const k0 = Math.max(1, Math.min(3, (H * 0.5) / mapH));
-        zoomer = d3.zoom().scaleExtent([1, 40])
+        zoomer = d3.zoom().scaleExtent([1, 120])
           .translateExtent([[b[0][0], b[0][1] - H * 0.45], [b[1][0], b[1][1] + H * 0.45]])
           .on('zoom', e => { t = e.transform; m.redraw(); });
         d3.select(canvas).call(zoomer).on('dblclick.zoom', null);
