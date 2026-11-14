@@ -35,6 +35,7 @@ const mk = d => fs.mkdirSync(d, { recursive: true });
 
 fs.copyFileSync(nm('d3/dist/d3.min.js'), path.join(www, 'vendor/d3.min.js'));
 fs.copyFileSync(nm('topojson-client/dist/topojson-client.min.js'), path.join(www, 'vendor/topojson-client.min.js'));
+fs.copyFileSync(nm('heic-to/dist/iife/heic-to.js'), path.join(www, 'vendor/heic-to.js'));
 
 const list = SOVEREIGN.map(a2 => {
   const name = NAME_FIX[a2] || countries.getName(a2, 'fr', { select: 'official' }) || countries.getName(a2, 'fr');

@@ -156,9 +156,11 @@
   }
 
   let confirmResolve = null;
-  function ask(text, yes = 'Confirmer') {
+  function ask(text, yes = 'Confirmer', info = false) {
     $('#confirm-text').textContent = text;
     $('#confirm-yes').textContent = yes;
+    $('#confirm-no').hidden = info;
+    $('#confirm-yes').classList.toggle('danger', !info);
     $('#confirm').classList.add('show');
     return new Promise(r => { confirmResolve = r; });
   }
@@ -1288,7 +1290,20 @@
   };
   $('#hl-open').onclick = () => (sheet.photos.length ? openViewer(0) : $('#file').click());
 
+  let heicLib = null;
+  const loadHeic = () => heicLib || (heicLib = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'vendor/heic-to.js';
+    sc.onload = () => (window.HeicTo ? res(window.HeicTo) : rej(new Error('heic')));
+    sc.onerror = () => { heicLib = null; rej(new Error('heic')); };
+    document.head.appendChild(sc);
+  }));
+  const isHeicFile = f => /hei[cf]/i.test(f.type) || /\.hei[cf]$/i.test(f.name || '');
   async function decode(file) {
+    if (isHeicFile(file)) {
+      const H = await loadHeic();
+      return await (H.heicTo || H)({ blob: file, type: 'bitmap' });
+    }
     // décodage directement réduit (évite de charger 50/200 Mpx en mémoire)
     if (file.size > 3 * 1048576) {
       try { return await createImageBitmap(file, { imageOrientation: 'from-image', resizeWidth: 2048, resizeQuality: 'high' }); }
@@ -1390,6 +1405,7 @@
         const when = f.lastModified && f.lastModified < Date.now() + 864e5 ? f.lastModified : Date.now();
         if ((f.type || '').startsWith('video/')) await storeVideo(code, f, when);
         else {
+          if (isHeicFile(f)) $('#imp-file').textContent = 'Photo HEIC · conversion…';
           let src;
           try { src = await decode(f); } catch (err) { err.kind = 'format'; throw err; }
           const blob = await encode(src, 2048, 0.85);
@@ -1414,7 +1430,7 @@
     const failed = fails.format + fails.espace + fails.autre;
     if (failed) {
       const why = [fails.format && `${fails.format} dans un format non lisible (HEIC ou autre)`, fails.espace && `${fails.espace} par manque d'espace`, fails.autre && `${fails.autre} pour une autre raison`].filter(Boolean).join(', ');
-      await ask(`${ok} souvenir${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}. ${failed} n'ont pas pu être ajoutés : ${why}.`, 'OK');
+      await ask(`${ok} souvenir${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}. ${failed} n'ont pas pu être ajoutés : ${why}.`, 'OK', true);
     } else if (ok) toast(`${ok} souvenir${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}`);
   });
 
