@@ -694,3 +694,8 @@ button, a, input { touch-action: manipulation; }
 .yb i { width: 100%; max-width: 26px; min-height: 3px; border-radius: 6px 6px 3px 3px; background: var(--accent); transition: height .6s var(--ease); }
 .yb b { font-size: 11px; font-weight: 700; }
 .yb span { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.sec-right { display: inline-flex; align-items: center; gap: 10px; }
+.sec-del { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: var(--surface-2); }
+.sec-del svg { width: 15px; height: 15px; }
+.sec-del:active { color: #F0605A; }

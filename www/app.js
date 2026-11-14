@@ -947,6 +947,7 @@
     $('#album-count').textContent = [np ? `${np} photo${np > 1 ? 's' : ''}` : '', nv ? `${nv} vidéo${nv > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
     $('#hl-label').textContent = n ? c.name : 'Vide';
     $('#hl-open').classList.toggle('is-empty', !n);
+    $('#album-clear').hidden = !n;
   }
 
   const outlineCache = new Map();
@@ -1156,6 +1157,17 @@
   })();
 
   $('#add-photo').onclick = () => $('#file').click();
+  $('#album-clear').onclick = async () => {
+    const code = sheet.code, list = sheet.photos.slice();
+    if (!list.length) return;
+    if (!await ask(`Supprimer tout l'album de ${info(code).name} (${list.length} souvenir${list.length > 1 ? 's' : ''}) ? Cette action est définitive.`, 'Tout supprimer')) return;
+    let ok = 0;
+    for (const p of list) { try { await deletePhoto(p); ok++; } catch {} }
+    photoCounts[code] = Math.max(0, (photoCounts[code] || 0) - ok);
+    renderPhotoCounts();
+    await loadAlbum();
+    toast(ok === list.length ? 'Album supprimé' : `${list.length - ok} souvenir(s) n'ont pas pu être supprimés`);
+  };
   $('#hl-open').onclick = () => (sheet.photos.length ? openViewer(0) : $('#file').click());
 
   async function decode(file) {
