@@ -484,9 +484,7 @@ body.intro .map-bottom { opacity: 0; transform: translateY(24px); pointer-events
 #onboard-list button:active, #onboard-list button.on { background: color-mix(in srgb, var(--brand) 20%, transparent); }
 #onboard-list img { width: 36px; height: 27px; border-radius: 5px; object-fit: cover; box-shadow: 0 0 0 1px var(--line); }
 
-@media (prefers-reduced-motion: reduce) {
-  * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
-}
+
 
 /* ---------- Performance ---------- */
 .flag { content-visibility: auto; contain-intrinsic-size: 98px 120px; }
@@ -543,3 +541,6 @@ button, a, input { touch-action: manipulation; }
 
 .chip.on { background: color-mix(in srgb, var(--city) 22%, var(--surface-2)); box-shadow: inset 0 0 0 1.5px var(--city); }
 #sheet .city-chips { margin-bottom: 6px; }
+
+#sheet .album-head.first { margin-top: 6px; }
+.sheet-full { margin-bottom: 4px; }

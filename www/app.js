@@ -904,12 +904,15 @@
     sheet.openedAt = performance.now();
     $('#hl-shape').innerHTML = shapeSVG(code);
     renderSheetHead();
+    const wasOpen = sheetEl.classList.contains('show');
+    sheetEl.getAnimations().forEach(a => a.cancel());
     sheetEl.style.transform = '';
     activeCity = -1;
     $('#city-cards').scrollLeft = 0;
     setPeek(isVisited(code) || (state.cities[code] || []).length > 0);
     sheetEl.classList.add('show');
     $('#scrim').classList.add('show');
+    if (!wasOpen) sheetEl.animate([{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], { duration: 460, easing: 'cubic-bezier(.16, 1, .3, 1)' });
     plan.select(code);
     renderCities();
     loadAlbum();
@@ -931,15 +934,20 @@
   }
   function toggleFull(full) {
     if (!sheet.open) return;
+    const h0 = sheetEl.offsetHeight;
     setPeek(!full);
+    const h1 = sheetEl.offsetHeight;
+    if (h0 !== h1) sheetEl.animate([{ transform: `translateY(${h1 - h0}px)` }, { transform: 'translateY(0)' }], { duration: 380, easing: 'cubic-bezier(.16, 1, .3, 1)' });
     requestAnimationFrame(() => focusArea(sheet.code));
   }
   function closeSheet() {
     if (!sheet.open) return;
     sheet.open = false;
-    sheetEl.classList.remove('show');
+    const from = sheetEl.style.transform || 'translateY(0)';
     sheetEl.style.transform = '';
     $('#scrim').classList.remove('show');
+    const a = sheetEl.animate([{ transform: from }, { transform: 'translateY(105%)' }], { duration: 320, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' });
+    a.onfinish = () => { if (!sheet.open) sheetEl.classList.remove('show'); a.cancel(); };
     globe.selected = null; globe.dirty = true;
     if (globe.active && !placing) globe.unfocus();
     plan.select(null);
@@ -960,11 +968,14 @@
     const end = () => {
       if (y0 === null) return;
       y0 = null; sheetEl.classList.remove('dragging');
-      sheetEl.style.transform = '';
       const peek = sheetEl.classList.contains('peek');
+      if (dy > 90 && peek) return closeSheet();
+      const back = sheetEl.style.transform;
+      sheetEl.style.transform = '';
       if (Math.abs(raw) < 6) return toggleFull(peek);
       if (raw < -40 && peek) return toggleFull(true);
-      if (dy > 90) return peek ? closeSheet() : toggleFull(false);
+      if (dy > 90) return toggleFull(false);
+      if (back) sheetEl.animate([{ transform: back }, { transform: 'translateY(0)' }], { duration: 260, easing: 'cubic-bezier(.16, 1, .3, 1)' });
     };
     $$('.grab, .sheet-head').forEach(el => {
       el.addEventListener('pointerdown', start);
@@ -1068,7 +1079,8 @@
   function renderCities() {
     const list = state.cities[sheet.code] || [];
     const n = list.length;
-    $('#sheet-cities').textContent = n ? `${n} ville${n > 1 ? 's' : ''}` : '';
+    $('#sheet-cities').textContent = '';
+    $('#city-count').textContent = n ? `${n} ville${n > 1 ? 's' : ''}` : '';
     $('#city-cards').innerHTML = '<button class="chip add" id="city-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Ajouter</button>'
       + list.map((c, i) =>
       `<span class="chip${i === activeCity ? ' on' : ''}" data-ci="${i}"><button><i></i>${esc(c.n)}</button><button class="x" data-del="${i}" aria-label="Retirer ${esc(c.n)}">×</button></span>`).join('');
