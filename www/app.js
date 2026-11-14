@@ -1289,6 +1289,11 @@
   $('#hl-open').onclick = () => (sheet.photos.length ? openViewer(0) : $('#file').click());
 
   async function decode(file) {
+    // décodage directement réduit (évite de charger 50/200 Mpx en mémoire)
+    if (file.size > 3 * 1048576) {
+      try { return await createImageBitmap(file, { imageOrientation: 'from-image', resizeWidth: 2048, resizeQuality: 'high' }); }
+      catch {}
+    }
     try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
     catch {
       return new Promise((res, rej) => {
@@ -1368,30 +1373,49 @@
     e.target.value = '';
     if (!files.length) return;
     const code = sheet.code;
-    $('#hl-open').classList.add('loading');
-    $('#hl-label').textContent = 'Import…';
-    let ok = 0;
-    for (const f of files) {
+    const ov = $('#importer');
+    $('#imp-name').textContent = info(code).name;
+    $('#imp-bar').style.width = '0%';
+    ov.classList.add('show');
+    let ok = 0, cancel = false;
+    const fails = { format: 0, espace: 0, autre: 0 };
+    $('#imp-cancel').onclick = () => { cancel = true; $('#imp-cancel').disabled = true; };
+    $('#imp-cancel').disabled = false;
+    const isHeic = f => /hei[cf]/i.test(f.type) || /\.hei[cf]$/i.test(f.name);
+    for (let k = 0; k < files.length && !cancel; k++) {
+      const f = files[k];
+      $('#imp-count').textContent = `${k + 1} / ${files.length}`;
+      $('#imp-file').textContent = (f.type || '').startsWith('video/') ? `Vidéo · ${(f.size / 1048576).toFixed(0)} Mo` : 'Photo';
       try {
         const when = f.lastModified && f.lastModified < Date.now() + 864e5 ? f.lastModified : Date.now();
         if ((f.type || '').startsWith('video/')) await storeVideo(code, f, when);
         else {
-          const src = await decode(f);
+          let src;
+          try { src = await decode(f); } catch (err) { err.kind = 'format'; throw err; }
           const blob = await encode(src, 2048, 0.85);
           if (src.close) src.close();
           await storePhoto(code, blob, when);
         }
         ok++;
-        $('#hl-label').textContent = `${ok}/${files.length}`;
-      } catch (err) { console.error('photo', err); }
+      } catch (err) {
+        console.error('import', f.name, f.type, err);
+        if (err && err.kind === 'format' || isHeic(f)) fails.format++;
+        else if (/quota|space|disk|ENOSPC|full/i.test(String(err && (err.message || err.name)))) fails.espace++;
+        else fails.autre++;
+      }
+      $('#imp-bar').style.width = `${((k + 1) / files.length) * 100}%`;
+      await new Promise(r => setTimeout(r, 0));
     }
-    $('#hl-open').classList.remove('loading');
+    ov.classList.remove('show');
     photoCounts[code] = (photoCounts[code] || 0) + ok;
     renderPhotoCounts();
-    if (ok < files.length) toast(`${files.length - ok} photo(s) n'ont pas pu être ajoutées`);
     if (ok && !isVisited(code)) setVisited(code, true);
-    else if (ok) toast(`${ok} souvenir${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}`);
     if (sheet.code === code && sheet.open) loadAlbum();
+    const failed = fails.format + fails.espace + fails.autre;
+    if (failed) {
+      const why = [fails.format && `${fails.format} dans un format non lisible (HEIC ou autre)`, fails.espace && `${fails.espace} par manque d'espace`, fails.autre && `${fails.autre} pour une autre raison`].filter(Boolean).join(', ');
+      await ask(`${ok} souvenir${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}. ${failed} n'ont pas pu être ajoutés : ${why}.`, 'OK');
+    } else if (ok) toast(`${ok} souvenir${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}`);
   });
 
   /* ---------- Villes ---------- */

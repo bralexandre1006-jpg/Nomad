@@ -729,3 +729,17 @@ button, a, input { touch-action: manipulation; }
 #story-video { transition: opacity .15s; }
 
 .hl-ring svg path, .story-av path, #step-shape path { vector-effect: non-scaling-stroke; stroke-width: 1.3px; }
+
+/* ---------- Import ---------- */
+#importer {
+  position: fixed; inset: 0; z-index: 69; display: grid; place-items: center; padding: 24px;
+  background: rgba(0, 0, 0, .65); opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+#importer.show { opacity: 1; pointer-events: auto; }
+.imp-box { width: min(320px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 20px; display: flex; flex-direction: column; gap: 6px; }
+.imp-box b { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.imp-box small { color: var(--muted); }
+.imp-track { height: 6px; border-radius: 6px; background: var(--surface-2); overflow: hidden; margin: 8px 0 6px; }
+.imp-track i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s var(--ease); }
+#imp-cancel { align-self: flex-end; padding: 8px 14px; border-radius: 10px; background: var(--surface-2); font-weight: 600; }
+#imp-cancel:disabled { opacity: .5; }
