@@ -517,7 +517,7 @@
 
     function pick(x, y) {
       const X = W / 2, Y = cy();
-      if (Math.hypot(x - X, y - Y) > radius()) return;
+      if (Math.hypot(x - X, y - Y) > radius()) { if (sheet.open) closeSheet(true); return; }
       proj.translate([X, Y]).scale(radius()).rotate(rot);
       if (placing) return placeAt(proj.invert([x, y]));
       const c = proj.invert([X, Y]);
@@ -534,7 +534,7 @@
       if (best) {
         if (navigator.vibrate) navigator.vibrate(8);
         openSheet(best);
-      }
+      } else if (sheet.open) closeSheet(true);
     }
 
     const fitZoom = (code, w, h, target) => {
@@ -584,6 +584,9 @@
       const target = [-ll[0], clampLat(-ll[1])];
       target[0] = from[0] + ((((target[0] - from[0]) % 360) + 540) % 360 - 180);
       anim = { t0: performance.now(), dur: 800, interp: d3.interpolate(from, target), z0: zoom, z1: Math.max(zoom, z), oy0: offY, oy1: offY };
+    };
+    g.recenter = () => {
+      anim = { t0: performance.now(), dur: 600, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: zoom, oy0: offY, oy1: 0 };
     };
     g.unfocus = () => {
       anim = { t0: performance.now(), dur: 700, interp: d3.interpolate([rot[0], rot[1]], [rot[0], rot[1]]), z0: zoom, z1: Math.min(zoom, 1.15), oy0: offY, oy1: 0 };
@@ -717,6 +720,7 @@
         const hit = ll && hitCountry(ll);
         if (hit && !(best && bd < 7 / t.k)) best = hit;
         if (best) { if (navigator.vibrate) navigator.vibrate(8); openSheet(best); }
+        else if (sheet.open) closeSheet(true);
       });
     }
     return m;
@@ -1219,7 +1223,7 @@
     if (h0 !== h1) sheetEl.animate([{ transform: `translateY(${h1 - h0}px)` }, { transform: 'translateY(0)' }], { duration: 380, easing: 'cubic-bezier(.16, 1, .3, 1)' });
     requestAnimationFrame(() => focusArea(sheet.code));
   }
-  function closeSheet() {
+  function closeSheet(keepZoom) {
     if (!sheet.open) return;
     sheet.open = false;
     const from = sheetEl.style.transform || 'translateY(0)';
@@ -1228,11 +1232,11 @@
     const a = sheetEl.animate([{ transform: from }, { transform: 'translateY(105%)' }], { duration: 320, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' });
     a.onfinish = () => { if (!sheet.open) sheetEl.classList.remove('show'); a.cancel(); };
     globe.selected = null; globe.dirty = true;
-    if (globe.active && !placing) globe.unfocus();
+    if (globe.active && !placing) { if (keepZoom === true) globe.recenter(); else globe.unfocus(); }
     plan.select(null);
     setTimeout(() => { if (!sheet.open) sheet.photos = []; }, 400);
   }
-  $('#scrim').onclick = () => { if (performance.now() - (sheet.openedAt || 0) > 450) closeSheet(); };
+  $('#scrim').onclick = () => { if (performance.now() - (sheet.openedAt || 0) > 450) closeSheet(true); };
   $('#sheet-close').onclick = closeSheet;
   $('#visit-btn').onclick = () => {
     if (navigator.vibrate) navigator.vibrate(12);
