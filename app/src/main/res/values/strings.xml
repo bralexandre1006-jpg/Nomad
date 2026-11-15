@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Clavier iOS</string>
+    <string name="ime_name">Clavier iOS</string>
+    <string name="subtype">Français (AZERTY)</string>
+</resources>
