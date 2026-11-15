@@ -137,6 +137,15 @@
           </div>
         </div>
 
+        <h3 class="section">Sauvegarde Google Drive</h3>
+        <div class="card" id="drive-card">
+          <div class="row drive-status"><span><b id="drive-title">Non connecté</b><small id="drive-sub">Sauvegarde tes pays, villes, photos et vidéos dans ton Google Drive.</small></span></div>
+          <button class="row" id="drive-connect"><span>Se connecter avec Google</span><span class="hint">›</span></button>
+          <button class="row" id="drive-backup" hidden><span>Sauvegarder maintenant</span><span class="hint">›</span></button>
+          <label class="row" id="drive-auto-row" hidden><span>Sauvegarde automatique (Wi-Fi)</span><input type="checkbox" class="switch" id="drive-auto"></label>
+          <button class="row" id="drive-restore"><span>Restaurer depuis Google Drive</span><span class="hint">›</span></button>
+        </div>
+
         <h3 class="section">Données</h3>
         <div class="card">
           <button class="row" id="export"><span>Exporter</span><span class="hint">JSON</span></button>
@@ -144,7 +153,7 @@
           <input type="file" id="import-file" accept="application/json,.json" hidden>
           <button class="row danger" id="reset">Réinitialiser les pays visités</button>
         </div>
-        <p class="foot">Vos pays et photos restent sur cet appareil.</p>
+        <p class="foot">Tes données restent sur ce téléphone, et dans ton Google Drive si la sauvegarde est activée.</p>
       </div>
     </section>
   </main>
@@ -322,7 +331,7 @@
 
   <div id="importer" aria-live="polite">
     <div class="imp-box">
-      <span class="eyebrow">Import · <span id="imp-name"></span></span>
+      <span class="eyebrow"><span id="imp-title">Import</span> · <span id="imp-name"></span></span>
       <b id="imp-count"></b>
       <small id="imp-file"></small>
       <div class="imp-track"><i id="imp-bar"></i></div>

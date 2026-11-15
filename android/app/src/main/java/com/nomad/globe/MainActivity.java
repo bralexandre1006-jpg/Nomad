@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(MediaImportPlugin.class);
+        registerPlugin(DriveBackupPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

@@ -18,8 +18,8 @@
   const Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
 
   const state = (() => {
-    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null, unit: 'n', mode: 'globe', years: {}, cities: {}, cityColor: '#FFC93C', wish: {}, showWish: true, wishColor: '#FF5A5F' };
-    try { const s = { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; s.years = s.years || {}; s.cities = s.cities || {}; s.wish = s.wish || {};
+    const d = { visited: {}, color: PRESETS[0], theme: 'dark', autoRotate: true, home: null, unit: 'n', mode: 'globe', years: {}, cities: {}, cityColor: '#FFC93C', wish: {}, showWish: true, wishColor: '#FF5A5F', drive: { on: false, auto: true, last: 0 } };
+    try { const s = { ...d, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; s.years = s.years || {}; s.cities = s.cities || {}; s.wish = s.wish || {}; s.drive = { on: false, auto: true, last: 0, ...(s.drive || {}) };
       ['ES-CN', 'ES-IB', 'PT-20'].forEach(k => { delete s.visited[k]; delete s.years[k]; delete s.cities[k]; });
       return s; } catch { return d; }
   })();
@@ -1280,6 +1280,7 @@
     try {
       hs.push(await MI.addListener('start', d => {
         if (!d.total) return;
+        $('#imp-title').textContent = 'Import';
         $('#imp-name').textContent = info(code).name;
         $('#imp-bar').style.width = '0%';
         $('#imp-count').textContent = `0 / ${d.total}`;
@@ -2254,6 +2255,119 @@
     } catch { toast('Échec de l\'import'); }
     finally { busy(false); }
   });
+
+  /* ---------- Sauvegarde Google Drive ---------- */
+  const DB = Plugins.DriveBackup;
+  const driveOK = () => !!(DB && NATIVE_FS);
+  const ago = t => {
+    const m = Math.round((Date.now() - t) / 60000);
+    if (m < 1) return "à l'instant";
+    if (m < 60) return `il y a ${m} min`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `il y a ${h} h`;
+    return `le ${new Date(t).toLocaleDateString('fr-FR')}`;
+  };
+  function renderDrive() {
+    const d = state.drive;
+    $('#drive-title').textContent = !driveOK() ? 'Disponible dans l\'app Android' : d.on ? (d.last ? `Dernière sauvegarde ${ago(d.last)}` : 'Connecté · pas encore sauvegardé') : 'Non connecté';
+    $('#drive-sub').textContent = d.on ? `${d.count || 0} souvenir${(d.count || 0) > 1 ? 's' : ''} · dossier caché Nomad de ton Drive` : 'Sauvegarde tes pays, villes, photos et vidéos dans ton Google Drive.';
+    $('#drive-connect').hidden = d.on;
+    $('#drive-backup').hidden = !d.on;
+    $('#drive-auto-row').hidden = !d.on;
+    $('#drive-auto').checked = d.auto;
+  }
+  async function backupPayload() {
+    const photos = [];
+    for (const id of await PhotoDB.keys()) {
+      const p = await PhotoDB.get(id);
+      if (!p || !p.file) continue;
+      const { blob, ...rest } = p;
+      photos.push(rest);
+    }
+    return {
+      payload: JSON.stringify({
+        app: 'nomad', format: 2, savedAt: new Date().toISOString(),
+        settings: { color: state.color, theme: state.theme, autoRotate: state.autoRotate, cityColor: state.cityColor, wishColor: state.wishColor, showWish: state.showWish, unit: state.unit },
+        home: state.home, visited: state.visited, years: state.years, cities: state.cities, wish: state.wish, photos
+      }),
+      count: photos.length
+    };
+  }
+  function driveProgress(title) {
+    const ov = $('#importer');
+    $('#imp-title').textContent = title;
+    $('#imp-name').textContent = 'Google Drive';
+    $('#imp-count').textContent = '…';
+    $('#imp-file').textContent = 'Connexion…';
+    $('#imp-bar').style.width = '0%';
+    $('#imp-cancel').hidden = true;
+    ov.classList.add('show');
+    let h = null;
+    DB.addListener('progress', d => {
+      $('#imp-count').textContent = d.total ? `${d.done} / ${d.total}` : '…';
+      $('#imp-file').textContent = d.phase === 'upload' ? 'Envoi des photos et vidéos' : 'Téléchargement des photos et vidéos';
+      $('#imp-bar').style.width = d.total ? `${(d.done / d.total) * 100}%` : '100%';
+    }).then(x => { h = x; });
+    return () => { ov.classList.remove('show'); $('#imp-cancel').hidden = false; if (h) h.remove(); };
+  }
+  async function driveBackup(silent) {
+    if (!driveOK()) return;
+    const { payload, count } = await backupPayload();
+    const done = silent ? () => {} : driveProgress('Sauvegarde');
+    try {
+      const r = await DB.backup({ data: payload, wifiOnly: !!silent, interactive: !silent });
+      if (r && r.skipped) return;
+      state.drive.on = true; state.drive.last = Date.now(); state.drive.count = count;
+      save();
+      if (!silent) toast('Sauvegarde terminée');
+    } catch (e) {
+      const m = String(e && e.message || e);
+      if (/NEED_SIGNIN/.test(m)) { state.drive.on = false; save(); }
+      if (!silent) await ask(m.replace('NEED_SIGNIN', 'Reconnecte-toi à Google.'), 'OK', true);
+    } finally { done(); renderDrive(); }
+  }
+  $('#drive-connect').onclick = async () => {
+    if (!driveOK()) return toast('Disponible dans l\'app Android');
+    try {
+      await DB.signIn();
+      state.drive.on = true; save(); renderDrive();
+      driveBackup(false);
+    } catch (e) { await ask(`Connexion impossible. ${String(e && e.message || e)}`, 'OK', true); }
+  };
+  $('#drive-backup').onclick = () => driveBackup(false);
+  $('#drive-auto').addEventListener('change', e => { state.drive.auto = e.target.checked; save(); });
+  $('#drive-restore').onclick = async () => {
+    if (!driveOK()) return toast('Disponible dans l\'app Android');
+    if (!await ask('Restaurer la sauvegarde Google Drive ? Elle s\'ajoute à ce qui est déjà sur ce téléphone.', 'Restaurer')) return;
+    const done = driveProgress('Restauration');
+    try {
+      const r = await DB.restore();
+      const d = JSON.parse(r.data);
+      Object.entries(d.visited || {}).forEach(([c, t]) => { if (known(c) && !state.visited[c]) state.visited[c] = t; });
+      Object.entries(d.years || {}).forEach(([c, y]) => { if (known(c) && !state.years[c]) state.years[c] = y; });
+      Object.entries(d.wish || {}).forEach(([c, t]) => { if (known(c) && !state.visited[c]) state.wish[c] = t; });
+      Object.entries(d.cities || {}).forEach(([c, list]) => {
+        if (!known(c) || !Array.isArray(list)) return;
+        const cur = state.cities[c] || (state.cities[c] = []);
+        list.forEach(x => { if (x && x.n && !cur.some(y => y.n === x.n)) cur.push(x); });
+      });
+      if (!state.home && d.home) state.home = d.home;
+      Object.assign(state, d.settings || {});
+      state.drive.on = true; state.drive.last = Date.now(); state.drive.count = (d.photos || []).length;
+      save();
+      for (const p of d.photos || []) { if (p && p.id && known(p.country)) await PhotoDB.add(p).catch(() => {}); }
+      done();
+      await ask(`Restauration terminée : ${Object.keys(d.visited || {}).length} pays, ${(d.photos || []).length} souvenirs.`, 'OK', true);
+      location.reload();
+    } catch (e) {
+      done();
+      await ask(String(e && e.message || e).replace('NEED_SIGNIN', 'Connecte-toi à Google.'), 'OK', true);
+    }
+  };
+  renderDrive();
+  if (driveOK() && state.drive.on && state.drive.auto && Date.now() - (state.drive.last || 0) > 20 * 3600e3) {
+    setTimeout(() => driveBackup(true), 8000);
+  }
 
   /* ---------- Bouton retour Android ---------- */
   try {

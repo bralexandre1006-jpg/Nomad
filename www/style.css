@@ -842,3 +842,8 @@ button, a, input { touch-action: manipulation; }
 
 #pviewer.chrome-off .pv-slide video { max-height: 100%; }
 #pviewer:not(.chrome-off) .pv-slide video { max-height: calc(100% - 260px); }
+
+/* ---------- Sauvegarde Drive ---------- */
+.drive-status span { display: flex; flex-direction: column; gap: 2px; }
+.drive-status b { font-weight: 600; }
+.drive-status small { color: var(--muted); font-size: 13px; line-height: 1.35; }
