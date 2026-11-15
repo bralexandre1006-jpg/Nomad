@@ -33,6 +33,8 @@ public class KeyboardView extends View {
         void onGesture(List<PointF> path);
         void onCursor(int dx, int dy);
         void onModeChanged();
+        void onSearchResult(int index);
+        void onSearchClose();
     }
 
     static final int SHIFT_OFF = 0, SHIFT_ON = 1, SHIFT_LOCK = 2;
@@ -83,6 +85,12 @@ public class KeyboardView extends View {
     private final List<PointF> trail = new ArrayList<>();
     private float tpAccX, tpAccY;
     private int deleteCount;
+
+    private boolean searchMode;
+    private String searchQuery = "";
+    private final List<String> searchResults = new ArrayList<>();
+    private static final int SEARCH_SLOTS = 8, SEARCH_CLOSE = 99;
+    private Typeface emojiFace;
 
     private boolean voiceActive;
     private float voiceLevel;
@@ -137,6 +145,31 @@ public class KeyboardView extends View {
         invalidate();
     }
 
+    void setSearch(boolean on, String query, List<String> results) {
+        boolean relayout = on != searchMode;
+        searchMode = on;
+        searchQuery = query;
+        searchResults.clear();
+        if (results != null) searchResults.addAll(results);
+        if (on) emojiFace = EmojiData.typeface(getContext());
+        if (relayout) { requestLayout(); layoutKeys(); }
+        invalidate();
+    }
+
+    boolean inSearch() { return searchMode; }
+
+    int normalHeight() {
+        boolean was = searchMode;
+        searchMode = false;
+        computeDims();
+        int h = (int) (keysTop + 4 * rowH + bottomH);
+        searchMode = was;
+        computeDims();
+        return h;
+    }
+
+    private float searchRowH() { return sugH * 0.5f; }
+
     void setVoice(boolean active) { voiceActive = active; voiceLevel = 0; invalidate(); }
 
     void setVoiceLevel(float rms) { voiceLevel = Math.max(0, Math.min(1, (rms + 2) / 12f)); invalidate(); }
@@ -163,7 +196,7 @@ public class KeyboardView extends View {
 
     private void computeDims() {
         boolean land = landscape();
-        sugH = (land ? 38 : 44) * d;
+        sugH = (searchMode ? (land ? 80 : 92) : (land ? 38 : 44)) * d;
         rowH = (land ? 42 : 54) * d;
         gapV = (land ? 7 : 11) * d;
         gapH = 6 * d;
@@ -226,7 +259,8 @@ public class KeyboardView extends View {
         Theme t = theme;
         c.drawColor(t.bg);
         boolean tp = pState == ST_TRACKPAD;
-        if (showSuggestionBar && !tp) drawSuggestions(c);
+        if (searchMode) drawSearch(c);
+        else if (showSuggestionBar && !tp) drawSuggestions(c);
         for (List<Key> r : rows) for (Key k : r) if (k.type != Key.SPACER) drawKey(c, k, tp);
         drawBottomBar(c);
         if (voiceActive) drawVoice(c);
@@ -253,11 +287,67 @@ public class KeyboardView extends View {
             String s = suggestions[i];
             if (s.isEmpty()) continue;
             text.setColor(t.text);
-            text.setTypeface(Typeface.DEFAULT);
+            Typeface ef = EmojiData.typeface(getContext());
+            text.setTypeface(ef != null && Character.isSurrogate(s.charAt(0)) ? ef : Typeface.DEFAULT);
             text.setTextSize(17 * d);
             CharSequence e = TextUtils.ellipsize(s, new android.text.TextPaint(text), w - 14 * d, TextUtils.TruncateAt.END);
             c.drawText(e.toString(), l + w / 2, cy - (text.descent() + text.ascent()) / 2, text);
         }
+    }
+
+    private void drawSearch(Canvas c) {
+        Theme t = theme;
+        float rh = searchRowH();
+        fill.setColor(t.special);
+        tmp.set(sidePad + 3 * d, 6 * d, getWidth() - sidePad - 3 * d, rh - 2 * d);
+        c.drawRoundRect(tmp, 10 * d, 10 * d, fill);
+        float cy = (6 * d + rh - 2 * d) / 2;
+        stroke.setColor(t.subText);
+        stroke.setStrokeWidth(1.8f * d);
+        float mx = sidePad + 20 * d;
+        c.drawCircle(mx, cy - 1.5f * d, 5.5f * d, stroke);
+        c.drawLine(mx + 4 * d, cy + 2.5f * d, mx + 8 * d, cy + 6.5f * d, stroke);
+        text.setTypeface(Typeface.DEFAULT);
+        text.setTextSize(16 * d);
+        text.setTextAlign(Paint.Align.LEFT);
+        boolean empty = searchQuery.isEmpty();
+        text.setColor(empty ? t.subText : t.text);
+        String q = empty ? "Rechercher un emoji" : searchQuery;
+        float base = cy - (text.descent() + text.ascent()) / 2;
+        c.drawText(q, mx + 16 * d, base, text);
+        float cursorX = mx + 16 * d + (empty ? 0 : text.measureText(q) + 2 * d);
+        fill.setColor(t.accent);
+        c.drawRect(cursorX, cy - 10 * d, cursorX + 2 * d, cy + 10 * d, fill);
+        text.setTextAlign(Paint.Align.CENTER);
+        float xx = getWidth() - sidePad - 22 * d;
+        fill.setColor(pressedSug == SEARCH_CLOSE ? t.key : t.subText);
+        c.drawCircle(xx, cy, 9 * d, fill);
+        stroke.setColor(t.special);
+        stroke.setStrokeWidth(1.8f * d);
+        c.drawLine(xx - 3.5f * d, cy - 3.5f * d, xx + 3.5f * d, cy + 3.5f * d, stroke);
+        c.drawLine(xx - 3.5f * d, cy + 3.5f * d, xx + 3.5f * d, cy - 3.5f * d, stroke);
+        float sw = getWidth() / (float) SEARCH_SLOTS;
+        float ry = rh + (sugH - rh) / 2;
+        text.setTypeface(emojiFace != null ? emojiFace : Typeface.DEFAULT);
+        text.setTextSize(Math.min(sw, sugH - rh) * 0.62f);
+        text.setColor(t.text);
+        float off = -(text.descent() + text.ascent()) / 2;
+        if (searchResults.isEmpty() && !empty) {
+            text.setTypeface(Typeface.DEFAULT);
+            text.setTextSize(14 * d);
+            text.setColor(t.subText);
+            c.drawText("Aucun emoji", getWidth() / 2f, ry - (text.descent() + text.ascent()) / 2, text);
+        }
+        for (int i = 0; i < searchResults.size() && i < SEARCH_SLOTS; i++) {
+            float cx = sw * (i + 0.5f);
+            if (pressedSug == i) {
+                fill.setColor(t.highlight);
+                tmp.set(cx - sw / 2 + 3 * d, rh + 2 * d, cx + sw / 2 - 3 * d, sugH - 2 * d);
+                c.drawRoundRect(tmp, 8 * d, 8 * d, fill);
+            }
+            c.drawText(searchResults.get(i), cx, ry + off, text);
+        }
+        text.setTypeface(Typeface.DEFAULT);
     }
 
     private int keyColor(Key k, boolean tp) {
@@ -624,6 +714,16 @@ public class KeyboardView extends View {
         }
         pId = id;
         pDownX = pX = x; pDownY = pY = y;
+        if (y < keysTop - gapV / 2 && searchMode) {
+            pState = ST_SUGGEST;
+            if (y < searchRowH()) pressedSug = x > getWidth() - sidePad - 48 * d ? SEARCH_CLOSE : -1;
+            else {
+                int i = (int) (x / (getWidth() / (float) SEARCH_SLOTS));
+                pressedSug = i < searchResults.size() ? i : -1;
+            }
+            invalidate();
+            return;
+        }
         if (y < keysTop - gapV / 2) {
             if (!showSuggestionBar) { pId = -1; return; }
             pState = ST_SUGGEST;
@@ -747,6 +847,7 @@ public class KeyboardView extends View {
                 break;
             }
             case ST_SUGGEST: {
+                if (searchMode) break;
                 int s = y < keysTop + rowH * 0.5f ? Math.min(2, (int) (x / (getWidth() / 3f))) : -1;
                 if (s != pressedSug) { pressedSug = s >= 0 && !suggestions[s].isEmpty() ? s : -1; invalidate(); }
                 break;
@@ -797,6 +898,13 @@ public class KeyboardView extends View {
                 }
                 break;
             case ST_SUGGEST:
+                if (searchMode) {
+                    int s = pressedSug;
+                    reset();
+                    if (s == SEARCH_CLOSE) listener.onSearchClose();
+                    else if (s >= 0) listener.onSearchResult(s);
+                    return;
+                }
                 if (pressedSug >= 0) { int s = pressedSug; reset(); listener.onSuggestion(s); return; }
                 break;
             case ST_BOTTOM:

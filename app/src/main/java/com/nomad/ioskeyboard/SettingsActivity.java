@@ -26,6 +26,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class SettingsActivity extends Activity {
     static final String EXTRA_ASK_MIC = "ask_mic";
@@ -86,9 +88,9 @@ public class SettingsActivity extends Activity {
 
         header("Emoji");
         TextView info = new TextView(this);
-        info.setText("Les emoji utilisent la police du système. Pour des emoji style iOS partout, installez le module Magisk/KernelSU « iOS Emoji » (root requis), ou importez ici un fichier .ttf pour l'affichage dans le clavier.");
+        info.setText("Les emoji utilisent la police du système. Pour des emoji style iOS partout, installez le module Magisk/KernelSU « iOS Emoji » (root requis), ou importez ici le .zip du module (ou un .ttf) : les emoji s'afficheront en style iOS dans le clavier.");
         box.addView(info);
-        button("Importer une police emoji (.ttf)", v -> {
+        button("Importer les emoji iOS (.zip du module ou .ttf)", v -> {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             i.addCategory(Intent.CATEGORY_OPENABLE);
             i.setType("*/*");
@@ -137,12 +139,11 @@ public class SettingsActivity extends Activity {
         if (req != REQ_FONT || res != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         File tmp = new File(getFilesDir(), "emoji.tmp");
-        try (InputStream in = getContentResolver().openInputStream(uri); OutputStream out = new FileOutputStream(tmp)) {
-            byte[] buf = new byte[65536];
-            int n;
-            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        try {
+            copyFont(uri, tmp);
         } catch (Exception e) {
-            Toast.makeText(this, "Erreur de lecture", Toast.LENGTH_SHORT).show();
+            tmp.delete();
+            Toast.makeText(this, e.getMessage() != null ? e.getMessage() : "Erreur de lecture", Toast.LENGTH_LONG).show();
             return;
         }
         try {
@@ -154,6 +155,52 @@ public class SettingsActivity extends Activity {
         }
         File f = EmojiData.fontFile(this);
         if (tmp.renameTo(f)) Toast.makeText(this, "Police emoji importée", Toast.LENGTH_SHORT).show();
+    }
+
+    /** Copies a .ttf, or extracts the emoji font from a .zip (e.g. a Magisk emoji module). */
+    private void copyFont(Uri uri, File dst) throws Exception {
+        boolean zip;
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            zip = in.read() == 'P' && in.read() == 'K';
+        }
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            if (!zip) {
+                write(in, dst);
+                return;
+            }
+            ZipInputStream z = new ZipInputStream(in);
+            ZipEntry e;
+            File best = null;
+            long bestSize = 0;
+            boolean bestEmoji = false;
+            int n = 0;
+            while ((e = z.getNextEntry()) != null) {
+                String name = e.getName().toLowerCase();
+                if (e.isDirectory() || !(name.endsWith(".ttf") || name.endsWith(".otf"))) continue;
+                File f = new File(getCacheDir(), "font" + (n++) + ".ttf");
+                write(z, f);
+                boolean emoji = name.contains("emoji");
+                if ((emoji && !bestEmoji) || (emoji == bestEmoji && f.length() > bestSize)) {
+                    if (best != null) best.delete();
+                    best = f; bestSize = f.length(); bestEmoji = emoji;
+                } else {
+                    f.delete();
+                }
+            }
+            if (best == null) throw new Exception("Aucune police trouvée dans le .zip");
+            if (!best.renameTo(dst)) {
+                try (InputStream bi = new java.io.FileInputStream(best)) { write(bi, dst); }
+                best.delete();
+            }
+        }
+    }
+
+    private static void write(InputStream in, File f) throws Exception {
+        try (OutputStream out = new FileOutputStream(f)) {
+            byte[] buf = new byte[65536];
+            int r;
+            while ((r = in.read(buf)) > 0) out.write(buf, 0, r);
+        }
     }
 
     private void header(String s) {

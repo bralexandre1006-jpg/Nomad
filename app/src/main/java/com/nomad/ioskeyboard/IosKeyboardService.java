@@ -43,6 +43,10 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
     private boolean autoSpaced;
     private final String[] sugValues = {"", "", ""};
     private String pendingCorrection;
+    private int emojiSlot = -1;
+    private boolean searching, swipeBeforeSearch;
+    private final StringBuilder query = new StringBuilder();
+    private List<String> results = new ArrayList<>();
 
     private SpeechRecognizer recognizer;
     private boolean listening;
@@ -53,7 +57,7 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
         super.onCreate();
         dict = new Dictionary(this);
         reloadDictionary();
-        new Thread(() -> EmojiData.get(this)).start();
+        new Thread(() -> EmojiData.loadKeywords(this)).start();
     }
 
     private void reloadDictionary() {
@@ -88,6 +92,7 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
     public void onStartInputView(EditorInfo info, boolean restarting) {
         super.onStartInputView(info, restarting);
         reloadDictionary();
+        if (searching) endSearch();
         Theme theme = Theme.get(this);
         keyboard.applyTheme(theme);
         styleWindow(theme);
@@ -174,7 +179,7 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
     @Override
     public void onUpdateSelection(int os, int oe, int ns, int ne, int cs, int ce) {
         super.onUpdateSelection(os, oe, ns, ne, cs, ce);
-        if (listening) return;
+        if (listening || searching) return;
         updateShift();
         updateSuggestions();
     }
@@ -226,7 +231,7 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
     }
 
     private void updateShift() {
-        if (keyboard == null) return;
+        if (keyboard == null || searching) return;
         if (keyboard.mode != Layouts.LETTERS) return;
         keyboard.setShift(autocap && sentenceStart() ? KeyboardView.SHIFT_ON : KeyboardView.SHIFT_OFF);
     }
@@ -245,8 +250,9 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
     }
 
     private void updateSuggestions() {
-        if (keyboard == null) return;
+        if (keyboard == null || searching) return;
         pendingCorrection = null;
+        emojiSlot = -1;
         for (int i = 0; i < 3; i++) sugValues[i] = "";
         if (!suggest || !dict.ready) { keyboard.setSuggestions(new String[3], -1); return; }
         String word = currentWord();
@@ -290,6 +296,9 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
             if (m.equals(sugValues[1]) || m.equals(word)) continue;
             sugValues[slot++] = m;
         }
+        String emo = EmojiData.forWord(pendingCorrection != null ? pendingCorrection : word);
+        if (emo == null) emo = EmojiData.forWord(word);
+        if (emo != null) { sugValues[2] = emo; emojiSlot = 2; }
         String[] show = {"«" + word + "»", sugValues[1], sugValues[2]};
         keyboard.setSuggestions(show, hl);
     }
@@ -323,6 +332,7 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
 
     @Override
     public void onText(String s) {
+        if (searching) { query.append(s.toLowerCase()); refreshSearch(); return; }
         InputConnection ic = ic();
         if (ic == null) return;
         ic.beginBatchEdit();
@@ -352,6 +362,7 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
 
     @Override
     public void onSpace() {
+        if (searching) { query.append(' '); refreshSearch(); return; }
         InputConnection ic = ic();
         if (ic == null) return;
         long now = SystemClock.uptimeMillis();
@@ -378,6 +389,11 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
 
     @Override
     public void onDelete(boolean word) {
+        if (searching) {
+            if (query.length() > 0) query.setLength(word ? 0 : query.length() - 1);
+            refreshSearch();
+            return;
+        }
         InputConnection ic = ic();
         if (ic == null) return;
         gestureWord = null;
@@ -423,6 +439,7 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
 
     @Override
     public void onReturn() {
+        if (searching) { onSearchClose(); return; }
         InputConnection ic = ic();
         if (ic == null) return;
         if (action != EditorInfo.IME_ACTION_NONE) {
@@ -441,7 +458,8 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
 
     @Override
     public void onEmoji() {
-        int h = keyboard.getHeight();
+        if (searching) endSearch();
+        int h = keyboard.normalHeight();
         emojiView.setTargetHeight(h);
         emojiView.prepare(keyboard.theme);
         emojiView.setVisibility(View.VISIBLE);
@@ -472,6 +490,13 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
         if (ic == null) return;
         String s = sugValues[i];
         if (s.isEmpty()) return;
+        if (i == emojiSlot) {
+            ic.commitText(" " + s + " ", 1);
+            emojiView.addRecent(s);
+            autoSpaced = true;
+            afterEdit();
+            return;
+        }
         ic.beginBatchEdit();
         String b = before(64);
         if (gestureWord != null && b.endsWith(gestureWord)) {
@@ -506,6 +531,7 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
 
     @Override
     public void onGesture(List<PointF> path) {
+        if (searching) return;
         InputConnection ic = ic();
         if (ic == null) return;
         List<String> words = dict.decodeGesture(path, keyboard.letterCenters(), keyboard.keyWidth());
@@ -537,6 +563,47 @@ public class IosKeyboardService extends InputMethodService implements KeyboardVi
     @Override
     public void onModeChanged() {
         if (keyboard.mode == Layouts.LETTERS) updateShift();
+    }
+
+    // ---------- Emoji search ----------
+
+    @Override
+    public void onEmojiSearch() {
+        searching = true;
+        query.setLength(0);
+        results = new ArrayList<>();
+        swipeBeforeSearch = keyboard.swipeEnabled;
+        keyboard.swipeEnabled = false;
+        showKeyboard();
+        keyboard.setMode(Layouts.LETTERS);
+        keyboard.forceShift(KeyboardView.SHIFT_OFF);
+        keyboard.setSearch(true, "", results);
+    }
+
+    private void refreshSearch() {
+        results = EmojiData.search(query.toString(), 8);
+        keyboard.forceShift(KeyboardView.SHIFT_OFF);
+        keyboard.setSearch(true, query.toString(), results);
+    }
+
+    private void endSearch() {
+        searching = false;
+        keyboard.swipeEnabled = swipeBeforeSearch;
+        keyboard.setSearch(false, "", null);
+    }
+
+    @Override
+    public void onSearchResult(int i) {
+        if (i >= results.size()) return;
+        InputConnection ic = ic();
+        if (ic != null) ic.commitText(results.get(i), 1);
+        emojiView.addRecent(results.get(i));
+    }
+
+    @Override
+    public void onSearchClose() {
+        endSearch();
+        onEmoji();
     }
 
     // ---------- EmojiView.Listener ----------

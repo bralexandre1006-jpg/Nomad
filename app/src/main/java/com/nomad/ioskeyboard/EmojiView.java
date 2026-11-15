@@ -29,6 +29,7 @@ public class EmojiView extends View {
         void onEmojiAbc();
         void onGlobe(boolean longPress);
         void onMic();
+        void onEmojiSearch();
     }
 
     private static final int ROWS = 5;
@@ -48,7 +49,7 @@ public class EmojiView extends View {
     private final List<Boolean> recentSkin = new ArrayList<>();
     private final Map<String, Integer> tones = new HashMap<>();
     private float[] catStart = new float[0];
-    private float contentW, cellW, cellH, gridTop, titleH, barTop, barH, bottomTop, bottomH, side;
+    private float contentW, cellW, cellH, gridTop, titleH, searchH, barTop, barH, bottomTop, bottomH, side;
     private float scrollX;
 
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -136,7 +137,7 @@ public class EmojiView extends View {
         prefs().edit().putString("recents", r.toString()).putString("tones", t.toString()).apply();
     }
 
-    private void addRecent(String e) {
+    void addRecent(String e) {
         int i = recents.indexOf(e);
         if (i >= 0) { recents.remove(i); recentSkin.remove(i); }
         recents.add(0, e);
@@ -172,7 +173,8 @@ public class EmojiView extends View {
         side = 6 * d;
         bottomH = land ? 0 : 50 * d;
         barH = 42 * d;
-        titleH = 30 * d;
+        searchH = 44 * d;
+        titleH = searchH + 26 * d;
         bottomTop = h - bottomH;
         barTop = bottomTop - barH;
         gridTop = titleH;
@@ -216,7 +218,18 @@ public class EmojiView extends View {
         text.setTextSize(12 * d);
         text.setColor(t.subText);
         text.setTextAlign(Paint.Align.LEFT);
-        c.drawText(catName(cur).toUpperCase(), side + 6 * d, titleH * 0.68f, text);
+        c.drawText(catName(cur).toUpperCase(), side + 6 * d, titleH - 8 * d, text);
+        fill.setColor(t.special);
+        tmp.set(side + 2 * d, 7 * d, getWidth() - side - 2 * d, searchH - 3 * d);
+        c.drawRoundRect(tmp, 10 * d, 10 * d, fill);
+        float sy = (7 * d + searchH - 3 * d) / 2;
+        stroke.setColor(t.subText);
+        stroke.setStrokeWidth(1.8f * d);
+        c.drawCircle(side + 20 * d, sy - 1.5f * d, 5.5f * d, stroke);
+        c.drawLine(side + 24 * d, sy + 2.5f * d, side + 28 * d, sy + 6.5f * d, stroke);
+        text.setTypeface(Typeface.DEFAULT);
+        text.setTextSize(16 * d);
+        c.drawText("Rechercher un emoji", side + 36 * d, sy - (text.descent() + text.ascent()) / 2, text);
         text.setTextAlign(Paint.Align.CENTER);
 
         float size = Math.min(cellW, cellH) * 0.74f;
@@ -429,6 +442,8 @@ public class EmojiView extends View {
                 pressedBar = Math.max(0, Math.min(catCount() - 1, (int) ((x - l) / ((r - l) / catCount()))));
             }
             if (pressedBar != -3) feedback.key(Key.MODE_NUM);
+        } else if (y < searchH) {
+            pressedBar = -6;
         } else if (y >= gridTop - 6 * d) {
             pressedBar = -2;
             hitEmoji(x, y);
@@ -507,6 +522,8 @@ public class EmojiView extends View {
             }
         } else if (pressedBar == -1) {
             listener.onEmojiAbc();
+        } else if (pressedBar == -6) {
+            listener.onEmojiSearch();
         } else if (pressedBar == -4) {
             listener.onGlobe(false);
         } else if (pressedBar == -5) {

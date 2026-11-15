@@ -9,7 +9,12 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 final class EmojiData {
     static final class Category {
@@ -65,6 +70,68 @@ final class EmojiData {
             }
         } catch (Exception ignored) { }
         cache = out;
+        return out;
+    }
+
+    private static volatile Map<String, String[]> keywords;
+    private static volatile Map<String, String> wordToEmoji;
+
+    static synchronized void loadKeywords(Context c) {
+        if (keywords != null) return;
+        Map<String, String[]> kw = new LinkedHashMap<>();
+        Map<String, String> w2e = new HashMap<>();
+        Map<String, Integer> count = new HashMap<>();
+        Set<String> available = new HashSet<>();
+        for (Category cat : get(c)) available.addAll(cat.emojis);
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getAssets().open("emoji_kw.txt"), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                int t = line.indexOf('\t');
+                if (t <= 0) continue;
+                String e = line.substring(0, t);
+                if (!available.contains(e)) continue;
+                String[] words = line.substring(t + 1).split(" ");
+                kw.put(e, words);
+                for (String w : words) {
+                    if (w.length() < 3) continue;
+                    Integer n = count.get(w);
+                    count.put(w, n == null ? 1 : n + 1);
+                    if (n == null) w2e.put(w, e);
+                }
+            }
+        } catch (Exception ignored) { }
+        for (Map.Entry<String, Integer> en : count.entrySet()) if (en.getValue() > 3) w2e.remove(en.getKey());
+        wordToEmoji = w2e;
+        keywords = kw;
+    }
+
+    /** Emoji whose name is exactly this word (for suggestions). */
+    static String forWord(String word) {
+        Map<String, String> m = wordToEmoji;
+        if (m == null || word.length() < 3) return null;
+        return m.get(Dictionary.norm(word));
+    }
+
+    static List<String> search(String query, int limit) {
+        List<String> out = new ArrayList<>();
+        Map<String, String[]> kw = keywords;
+        String[] terms = Dictionary.norm(query.trim()).split("\\s+");
+        if (kw == null || terms.length == 0 || terms[0].isEmpty()) return out;
+        List<String> partial = new ArrayList<>();
+        for (Map.Entry<String, String[]> e : kw.entrySet()) {
+            boolean all = true, exactHit = false;
+            for (String q : terms) {
+                boolean hit = false;
+                for (String w : e.getValue()) {
+                    if (w.startsWith(q)) { hit = true; if (w.equals(q)) exactHit = true; break; }
+                }
+                if (!hit) { all = false; break; }
+            }
+            if (!all) continue;
+            if (exactHit) out.add(e.getKey()); else partial.add(e.getKey());
+            if (out.size() >= limit) break;
+        }
+        for (String p : partial) { if (out.size() >= limit) break; out.add(p); }
         return out;
     }
 
