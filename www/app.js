@@ -2305,12 +2305,21 @@
     $('#imp-cancel').hidden = true;
     ov.classList.add('show');
     let h = null;
+    let last = Date.now();
     DB.addListener('progress', d => {
-      $('#imp-count').textContent = d.total ? `${d.done} / ${d.total}` : '…';
-      $('#imp-file').textContent = d.phase === 'upload' ? 'Envoi des photos et vidéos' : 'Téléchargement des photos et vidéos';
+      last = Date.now();
+      if (d.phase === 'info') { $('#imp-file').textContent = d.text; return; }
+      $('#imp-count').textContent = d.total ? `${d.done} / ${d.total}` : (d.phase === 'upload' ? 'À jour' : '…');
+      $('#imp-file').textContent = d.text || (d.phase === 'upload' ? 'Envoi des photos et vidéos' : 'Téléchargement des photos et vidéos');
       $('#imp-bar').style.width = d.total ? `${(d.done / d.total) * 100}%` : '100%';
     }).then(x => { h = x; });
-    return () => { ov.classList.remove('show'); $('#imp-cancel').hidden = false; if (h) h.remove(); };
+    const wd = setInterval(() => {
+      if (Date.now() - last > 45000) $('#imp-file').textContent = 'Toujours en cours… (réseau lent ou gros fichier)';
+    }, 5000);
+    $('#imp-cancel').hidden = false;
+    $('#imp-cancel').disabled = false;
+    $('#imp-cancel').onclick = () => { $('#imp-cancel').disabled = true; DB.cancel().catch(() => {}); };
+    return () => { clearInterval(wd); ov.classList.remove('show'); $('#imp-cancel').hidden = false; if (h) h.remove(); };
   }
   async function driveBackup(silent) {
     if (!driveOK()) return;

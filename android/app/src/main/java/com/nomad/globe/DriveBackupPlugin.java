@@ -47,6 +47,20 @@ public class DriveBackupPlugin extends Plugin {
     private PluginCall pendingCall;
     private Runnable pendingNext;
     private volatile String token;
+    private volatile boolean cancelled = false;
+
+    @PluginMethod
+    public void cancel(PluginCall call) {
+        cancelled = true;
+        call.resolve();
+    }
+
+    private void phase(String text) {
+        JSObject p = new JSObject();
+        p.put("phase", "info");
+        p.put("text", text);
+        notifyListeners("progress", p);
+    }
 
     @Override
     public void load() {
@@ -61,7 +75,7 @@ public class DriveBackupPlugin extends Plugin {
                 token = ar.getAccessToken();
                 if (token == null) { c.reject("Connexion annulée"); return; }
                 next.run();
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 c.reject("Connexion annulée");
             }
         });
@@ -73,6 +87,7 @@ public class DriveBackupPlugin extends Plugin {
             .build();
         Identity.getAuthorizationClient(getActivity()).authorize(req)
             .addOnSuccessListener(ar -> {
+                try {
                 if (ar.hasResolution()) {
                     if (!interactive || ar.getPendingIntent() == null) { call.reject("NEED_SIGNIN"); return; }
                     pendingCall = call;
@@ -82,6 +97,7 @@ public class DriveBackupPlugin extends Plugin {
                     token = ar.getAccessToken();
                     next.run();
                 }
+                } catch (Throwable e) { call.reject("Connexion Google impossible : " + e.getMessage()); }
             })
             .addOnFailureListener(e -> call.reject("Connexion Google impossible : " + e.getMessage()));
     }
@@ -101,19 +117,27 @@ public class DriveBackupPlugin extends Plugin {
         boolean wifiOnly = Boolean.TRUE.equals(call.getBoolean("wifiOnly", false));
         boolean interactive = Boolean.TRUE.equals(call.getBoolean("interactive", true));
         if (wifiOnly) {
-            ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
-            if (cm == null || cm.isActiveNetworkMetered()) {
+            boolean metered = true;
+            try {
+                ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+                metered = cm == null || cm.isActiveNetworkMetered();
+            } catch (Throwable ignored) {}
+            if (metered) {
                 JSObject r = new JSObject();
                 r.put("skipped", true);
                 call.resolve(r);
                 return;
             }
         }
+        cancelled = false;
+        phase("Autorisation Google…");
         authorize(call, interactive, () -> new Thread(() -> doBackup(call, data)).start());
     }
 
     @PluginMethod
     public void restore(PluginCall call) {
+        cancelled = false;
+        phase("Autorisation Google…");
         authorize(call, true, () -> new Thread(() -> doRestore(call)).start());
     }
 
@@ -127,6 +151,7 @@ public class DriveBackupPlugin extends Plugin {
 
     private void doBackup(PluginCall call, String data) {
         try {
+            phase("Lecture de ton Google Drive…");
             Map<String, String> remote = list();
             File dir = new File(getContext().getFilesDir(), "photos");
             File[] local = dir.exists() ? dir.listFiles() : new File[0];
@@ -136,10 +161,13 @@ public class DriveBackupPlugin extends Plugin {
             int done = 0;
             progress("upload", 0, todo);
             for (File f : local) {
+                if (cancelled) throw new Exception("arrêtée");
                 if (!f.isFile() || remote.containsKey(f.getName())) continue;
+                curDone = done; curTotal = todo;
                 upload(f, f.getName(), mimeOf(f.getName()));
                 progress("upload", ++done, todo);
             }
+            phase("Enregistrement des données…");
             byte[] json = data.getBytes(StandardCharsets.UTF_8);
             if (remote.containsKey(DATA)) {
                 updateMedia(remote.get(DATA), json);
@@ -160,6 +188,7 @@ public class DriveBackupPlugin extends Plugin {
 
     private void doRestore(PluginCall call) {
         try {
+            phase("Lecture de ton Google Drive…");
             Map<String, String> remote = list();
             if (!remote.containsKey(DATA)) { call.reject("Aucune sauvegarde trouvée sur ce compte Google"); return; }
             String json = new String(downloadBytes(remote.get(DATA)), StandardCharsets.UTF_8);
@@ -183,6 +212,7 @@ public class DriveBackupPlugin extends Plugin {
             progress("download", 0, need.size());
             int done = 0;
             for (String name : need) {
+                if (cancelled) throw new Exception("arrêtée");
                 download(remote.get(name), new File(dir, name));
                 progress("download", ++done, need.size());
             }
@@ -253,6 +283,8 @@ public class DriveBackupPlugin extends Plugin {
         return m;
     }
 
+    private volatile int curDone = 0, curTotal = 0;
+
     private void upload(File f, String name, String mime) throws Exception {
         HttpURLConnection c = open("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable", "POST");
         c.setDoOutput(true);
@@ -273,10 +305,24 @@ public class DriveBackupPlugin extends Plugin {
         u.setReadTimeout(120000);
         u.setFixedLengthStreamingMode(f.length());
         u.setRequestProperty("Content-Type", mime);
+        long sent = 0, lastNote = 0, size = f.length();
         try (InputStream in = new FileInputStream(f); OutputStream os = u.getOutputStream()) {
             byte[] buf = new byte[1 << 16];
             int n;
-            while ((n = in.read(buf)) > 0) os.write(buf, 0, n);
+            while ((n = in.read(buf)) > 0) {
+                if (cancelled) throw new Exception("arrêtée");
+                os.write(buf, 0, n);
+                sent += n;
+                if (size > 4_000_000 && sent - lastNote > 1_000_000) {
+                    lastNote = sent;
+                    JSObject p = new JSObject();
+                    p.put("phase", "upload");
+                    p.put("done", curDone);
+                    p.put("total", curTotal);
+                    p.put("text", "Envoi d'une vidéo : " + (sent / 1_000_000) + " / " + (size / 1_000_000) + " Mo");
+                    notifyListeners("progress", p);
+                }
+            }
         }
         check(u);
     }
