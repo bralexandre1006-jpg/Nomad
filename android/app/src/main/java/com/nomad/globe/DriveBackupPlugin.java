@@ -60,6 +60,17 @@ public class DriveBackupPlugin extends Plugin {
         p.put("phase", "info");
         p.put("text", text);
         notifyListeners("progress", p);
+        BackupService.update(getContext(), -1, -1, text);
+    }
+
+    private void askNotifications() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return;
+        try {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                androidx.core.app.ActivityCompat.requestPermissions(getActivity(), new String[] { android.Manifest.permission.POST_NOTIFICATIONS }, 4212);
+            }
+        } catch (Throwable ignored) {}
     }
 
     @Override
@@ -130,15 +141,23 @@ public class DriveBackupPlugin extends Plugin {
             }
         }
         cancelled = false;
+        if (interactive) askNotifications();
         phase("Autorisation Google…");
-        authorize(call, interactive, () -> new Thread(() -> doBackup(call, data)).start());
+        authorize(call, interactive, () -> {
+            BackupService.start(getContext(), "Sauvegarde Nomad", () -> cancelled = true);
+            new Thread(() -> doBackup(call, data)).start();
+        });
     }
 
     @PluginMethod
     public void restore(PluginCall call) {
         cancelled = false;
+        askNotifications();
         phase("Autorisation Google…");
-        authorize(call, true, () -> new Thread(() -> doRestore(call)).start());
+        authorize(call, true, () -> {
+            BackupService.start(getContext(), "Restauration Nomad", () -> cancelled = true);
+            new Thread(() -> doRestore(call)).start();
+        });
     }
 
     private void progress(String phase, int done, int total) {
@@ -147,6 +166,7 @@ public class DriveBackupPlugin extends Plugin {
         p.put("done", done);
         p.put("total", total);
         notifyListeners("progress", p);
+        BackupService.update(getContext(), done, total, null);
     }
 
     private void doBackup(PluginCall call, String data) {
@@ -180,8 +200,10 @@ public class DriveBackupPlugin extends Plugin {
             JSObject r = new JSObject();
             r.put("uploaded", done);
             r.put("files", local.length);
+            BackupService.stop(getContext(), "Sauvegarde Nomad terminée");
             call.resolve(r);
         } catch (Throwable e) {
+            BackupService.stop(getContext(), cancelled ? null : "Sauvegarde Nomad interrompue");
             call.reject("Sauvegarde impossible : " + e.getMessage());
         }
     }
@@ -219,8 +241,10 @@ public class DriveBackupPlugin extends Plugin {
             JSObject r = new JSObject();
             r.put("data", json);
             r.put("downloaded", done);
+            BackupService.stop(getContext(), "Restauration Nomad terminée");
             call.resolve(r);
         } catch (Throwable e) {
+            BackupService.stop(getContext(), cancelled ? null : "Restauration Nomad interrompue");
             call.reject("Restauration impossible : " + e.getMessage());
         }
     }
@@ -321,6 +345,7 @@ public class DriveBackupPlugin extends Plugin {
                     p.put("total", curTotal);
                     p.put("text", "Envoi d'une vidéo : " + (sent / 1_000_000) + " / " + (size / 1_000_000) + " Mo");
                     notifyListeners("progress", p);
+                    BackupService.update(getContext(), curDone, curTotal, (sent / 1_000_000) + " / " + (size / 1_000_000) + " Mo");
                 }
             }
         }

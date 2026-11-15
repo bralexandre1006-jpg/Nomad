@@ -2318,8 +2318,9 @@
     }, 5000);
     $('#imp-cancel').hidden = false;
     $('#imp-cancel').disabled = false;
+    $('#imp-note').hidden = false;
     $('#imp-cancel').onclick = () => { $('#imp-cancel').disabled = true; DB.cancel().catch(() => {}); };
-    return () => { clearInterval(wd); ov.classList.remove('show'); $('#imp-cancel').hidden = false; if (h) h.remove(); };
+    return () => { clearInterval(wd); $('#imp-note').hidden = true; ov.classList.remove('show'); $('#imp-cancel').hidden = false; if (h) h.remove(); };
   }
   async function driveBackup(silent) {
     if (!driveOK()) return;

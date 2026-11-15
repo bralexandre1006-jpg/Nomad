@@ -752,6 +752,8 @@ button, a, input { touch-action: manipulation; }
 .imp-box { width: min(320px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 20px; display: flex; flex-direction: column; gap: 6px; }
 .imp-box b { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .imp-box small { color: var(--muted); }
+#imp-note { font-size: 12px; margin-top: 4px; }
+#imp-note[hidden] { display: none; }
 .imp-track { height: 6px; border-radius: 6px; background: var(--surface-2); overflow: hidden; margin: 8px 0 6px; }
 .imp-track i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s var(--ease); }
 #imp-cancel { align-self: flex-end; padding: 8px 14px; border-radius: 10px; background: var(--surface-2); font-weight: 600; }
