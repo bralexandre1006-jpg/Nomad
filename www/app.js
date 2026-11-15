@@ -2322,8 +2322,16 @@
     $('#imp-cancel').onclick = () => { $('#imp-cancel').disabled = true; DB.cancel().catch(() => {}); };
     return () => { clearInterval(wd); $('#imp-note').hidden = true; ov.classList.remove('show'); $('#imp-cancel').hidden = false; if (h) h.remove(); };
   }
+  async function ensureNotif() {
+    try {
+      const r = await DB.notifications();
+      if (r && r.on) return;
+      if (await ask('Active les notifications de Nomad pour suivre la sauvegarde quand l\'app est en arrière-plan.', 'Ouvrir les réglages')) await DB.openNotifSettings();
+    } catch (e) {}
+  }
   async function driveBackup(silent) {
     if (!driveOK()) return;
+    if (!silent) await ensureNotif();
     const { payload, count } = await backupPayload();
     const done = silent ? () => {} : driveProgress('Sauvegarde');
     try {
@@ -2352,6 +2360,7 @@
   $('#drive-restore').onclick = async () => {
     if (!driveOK()) return toast('Disponible dans l\'app Android');
     if (!await ask('Restaurer la sauvegarde Google Drive ? Elle s\'ajoute à ce qui est déjà sur ce téléphone.', 'Restaurer')) return;
+    await ensureNotif();
     const done = driveProgress('Restauration');
     try {
       const r = await DB.restore();

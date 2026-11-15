@@ -11,7 +11,10 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import com.google.android.gms.auth.api.identity.AuthorizationRequest;
 import com.google.android.gms.auth.api.identity.AuthorizationResult;
 import com.google.android.gms.auth.api.identity.Identity;
@@ -38,7 +41,7 @@ import java.util.Map;
  * Sauvegarde dans le dossier caché « appDataFolder » du Google Drive de l'utilisateur :
  * données (nomad-data.json) + fichiers photos/vidéos de files/photos/. Tout le transfert est natif.
  */
-@CapacitorPlugin(name = "DriveBackup")
+@CapacitorPlugin(name = "DriveBackup", permissions = { @Permission(strings = { "android.permission.POST_NOTIFICATIONS" }, alias = "notifications") })
 public class DriveBackupPlugin extends Plugin {
 
     private static final String SCOPE = "https://www.googleapis.com/auth/drive.appdata";
@@ -63,14 +66,41 @@ public class DriveBackupPlugin extends Plugin {
         BackupService.update(getContext(), -1, -1, text);
     }
 
-    private void askNotifications() {
-        if (android.os.Build.VERSION.SDK_INT < 33) return;
+    private boolean notifOn() {
+        return androidx.core.app.NotificationManagerCompat.from(getContext()).areNotificationsEnabled();
+    }
+
+    @PluginMethod
+    public void notifications(PluginCall call) {
+        if (notifOn() || android.os.Build.VERSION.SDK_INT < 33 || getPermissionState("notifications") == PermissionState.GRANTED) {
+            JSObject r = new JSObject();
+            r.put("on", notifOn());
+            call.resolve(r);
+            return;
+        }
+        requestPermissionForAlias("notifications", call, "notifCb");
+    }
+
+    @PermissionCallback
+    private void notifCb(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("on", notifOn());
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void openNotifSettings(PluginCall call) {
         try {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(getContext(), android.Manifest.permission.POST_NOTIFICATIONS)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                androidx.core.app.ActivityCompat.requestPermissions(getActivity(), new String[] { android.Manifest.permission.POST_NOTIFICATIONS }, 4212);
-            }
-        } catch (Throwable ignored) {}
+            android.content.Intent i = new android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getContext().getPackageName())
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+        } catch (Throwable e) {
+            android.content.Intent i = new android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.parse("package:" + getContext().getPackageName())).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+        }
+        call.resolve();
     }
 
     @Override
@@ -141,7 +171,6 @@ public class DriveBackupPlugin extends Plugin {
             }
         }
         cancelled = false;
-        if (interactive) askNotifications();
         phase("Autorisation Google…");
         authorize(call, interactive, () -> {
             BackupService.start(getContext(), "Sauvegarde Nomad", () -> cancelled = true);
@@ -152,7 +181,6 @@ public class DriveBackupPlugin extends Plugin {
     @PluginMethod
     public void restore(PluginCall call) {
         cancelled = false;
-        askNotifications();
         phase("Autorisation Google…");
         authorize(call, true, () -> {
             BackupService.start(getContext(), "Restauration Nomad", () -> cancelled = true);

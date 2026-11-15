@@ -18,7 +18,7 @@ import androidx.core.app.ServiceCompat;
 /** Garde la sauvegarde/restauration Drive active quand l'app passe en arrière-plan. */
 public class BackupService extends Service {
 
-    private static final String CHANNEL = "nomad_backup";
+    private static final String CHANNEL = "nomad_backup2";
     private static final int ID = 4210;
     private static final int DONE_ID = 4211;
     private static final String ACTION_CANCEL = "com.nomad.globe.BACKUP_CANCEL";
@@ -95,8 +95,11 @@ public class BackupService extends Service {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationManager nm = ctx.getSystemService(NotificationManager.class);
         if (nm != null && nm.getNotificationChannel(CHANNEL) == null) {
-            NotificationChannel c = new NotificationChannel(CHANNEL, "Sauvegarde Google Drive", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel c = new NotificationChannel(CHANNEL, "Sauvegarde Google Drive", NotificationManager.IMPORTANCE_DEFAULT);
+            c.setSound(null, null);
+            c.enableVibration(false);
             nm.createNotificationChannel(c);
+            nm.deleteNotificationChannel("nomad_backup");
         }
     }
 
