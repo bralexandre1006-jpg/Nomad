@@ -109,19 +109,10 @@
         </div>
 
         <h3 class="section">Couleurs</h3>
-        <div class="card">
-          <div class="crow">
-            <span>Pays visités</span>
-            <div class="mini-sw"><div id="swatches"></div><label class="sw-custom" aria-label="Couleur personnalisée"><input type="color" id="custom-color"></label></div>
-          </div>
-          <div class="crow">
-            <span>Prochaines destinations</span>
-            <div class="mini-sw"><div id="wish-swatches"></div></div>
-          </div>
-          <div class="crow">
-            <span>Villes</span>
-            <div class="mini-sw"><div id="city-swatches"></div></div>
-          </div>
+        <div class="card" id="colors-card">
+          <button class="row crow2" data-k="color" data-t="Pays visités"><span>Pays visités</span><span class="cval"><em></em><i></i></span></button>
+          <button class="row crow2" data-k="wishColor" data-t="Prochaines destinations"><span>Prochaines destinations</span><span class="cval"><em></em><i></i></span></button>
+          <button class="row crow2" data-k="cityColor" data-t="Villes"><span>Villes</span><span class="cval"><em></em><i></i></span></button>
         </div>
 
         <h3 class="section">Carte</h3>
@@ -330,7 +321,21 @@
     <ul id="onboard-list"></ul>
   </section>
 
-  <div id="importer" aria-live="polite">
+  <div id="cpick">
+      <div class="cp-scrim"></div>
+      <div class="cp-panel" role="dialog" aria-label="Choisir une couleur">
+        <div class="cp-grab"></div>
+        <div class="cp-head"><span class="eyebrow" id="cp-title"></span><button id="cp-done">OK</button></div>
+        <div class="cp-preview" id="cp-preview"><b id="cp-name"></b><small id="cp-hex"></small></div>
+        <div class="cp-lbl">Teinte</div>
+        <div class="cp-slider" id="cp-hue"><i></i></div>
+        <div class="cp-lbl">Luminosité</div>
+        <div class="cp-slider" id="cp-light"><i></i></div>
+        <div class="cp-lbl">Suggestions</div>
+        <div class="cp-presets" id="cp-presets"></div>
+      </div>
+    </div>
+    <div id="importer" aria-live="polite">
     <div class="imp-box">
       <span class="eyebrow"><span id="imp-title">Import</span> · <span id="imp-name"></span></span>
       <b id="imp-count"></b>

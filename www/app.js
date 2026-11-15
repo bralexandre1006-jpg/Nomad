@@ -2099,40 +2099,90 @@
 
   /* ---------- Réglages ---------- */
   function renderSettings() {
-    $('#swatches').innerHTML = PRESETS.map(c =>
-      `<button class="swatch${c.toLowerCase() === state.color.toLowerCase() ? ' active' : ''}" style="background:${c}" data-color="${c}" aria-label="Couleur ${c}"></button>`).join('');
-    $('#custom-color').value = state.color;
-    $('#city-swatches').innerHTML = CITY_COLORS.map(c =>
-      `<button class="swatch${c.toLowerCase() === state.cityColor.toLowerCase() ? ' active' : ''}" style="background:${c}" data-city-color="${c}" aria-label="Couleur ${c}"></button>`).join('');
+    $$('#colors-card .crow2').forEach(b => {
+      const c = state[b.dataset.k] || '#ffffff';
+      b.querySelector('i').style.background = c;
+      b.querySelector('em').textContent = colorName(c);
+    });
     $$('#theme button').forEach(b => b.classList.toggle('active', b.dataset.theme === state.theme));
     $('#autorotate').checked = state.autoRotate;
     $('#show-wish').checked = state.showWish;
-    $('#wish-swatches').innerHTML = WISH_COLORS.map(c =>
-      `<button class="swatch${c.toLowerCase() === state.wishColor.toLowerCase() ? ' active' : ''}" style="background:${c}" data-wish-color="${c}" aria-label="Couleur ${c}"></button>`).join('');
-    $('#wish-swatches').classList.toggle('off', !state.showWish);
     const h = byCode.get(state.home);
     $('#home-value').textContent = h ? h.name : 'Choisir';
   }
-  const WISH_COLORS = ['#FF5A5F', '#FF9F1C', '#F6BF26', '#4CC9F0', '#B388FF', '#FF4FD8', '#7CFFB2', '#9E9E9E'];
-  $('#wish-swatches').addEventListener('click', e => {
-    const b = e.target.closest('[data-wish-color]');
-    if (!b) return;
-    state.wishColor = b.dataset.wishColor; save(); applyTheme(); renderSettings();
-  });
+  /* Sélecteur de couleur : teinte + luminosité */
+  const PALETTE = ['#FF5A5F', '#FF9F1C', '#FFC93C', '#2EBD59', '#2BC4B6', '#4CC9F0', '#4C7BD9', '#8B6CD6', '#FF4FD8', '#FFFFFF'];
+  const SAT = 82;
+  function hexToHsl(hex) {
+    const n = parseInt(String(hex).slice(1, 7), 16) || 0;
+    const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [(h * 60 + 360) % 360, d ? d / (1 - Math.abs(2 * l - 1)) * 100 : 0, l * 100];
+  }
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+    const f = n => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)))).toString(16).padStart(2, '0');
+    return `#${f(0)}${f(8)}${f(4)}`.toUpperCase();
+  }
+  function colorName(hex) {
+    const [h, s, l] = hexToHsl(hex);
+    if (l > 92 || s < 12 && l > 75) return 'Blanc';
+    if (s < 12) return l < 30 ? 'Noir' : 'Gris';
+    const names = [[12, 'Rouge'], [25, 'Corail'], [42, 'Orange'], [62, 'Jaune'], [90, 'Citron'], [150, 'Vert'], [180, 'Turquoise'], [205, 'Bleu ciel'], [240, 'Bleu'], [275, 'Violet'], [320, 'Rose'], [345, 'Framboise'], [361, 'Rouge']];
+    return names.find(([m]) => h < m)[1];
+  }
+  const cp = { k: null, h: 0, l: 60 };
+  const cpEl = $('#cpick');
+  const cpOpen = () => cpEl.classList.contains('show');
+  function cpSet(hex, fromSliders) {
+    state[cp.k] = hex;
+    applyTheme(); globe.dirty = true;
+    if (!fromSliders) { const [h, , l] = hexToHsl(hex); cp.h = h; cp.l = Math.max(30, Math.min(100, l)); }
+    $('#cp-preview').style.setProperty('--c', hex);
+    $('#cp-preview').classList.toggle('lt', isLight(hex));
+    $('#cp-name').textContent = colorName(hex);
+    $('#cp-hex').textContent = hex.toUpperCase();
+    $('#cp-hue i').style.left = `${cp.h / 360 * 100}%`;
+    $('#cp-hue i').style.background = `hsl(${cp.h} ${SAT}% 55%)`;
+    $('#cp-light').style.background = `linear-gradient(90deg, hsl(${cp.h} ${SAT}% 30%), hsl(${cp.h} ${SAT}% 60%), #fff)`;
+    $('#cp-light i').style.left = `${(cp.l - 30) / 70 * 100}%`;
+    $('#cp-light i').style.background = hex;
+    $$('#cp-presets button').forEach(b => b.classList.toggle('active', b.dataset.c.toLowerCase() === hex.toLowerCase()));
+  }
+  const isLight = c => { const n = parseInt(String(c).slice(1, 7), 16); return (((n >> 16) & 255) * .299 + ((n >> 8) & 255) * .587 + (n & 255) * .114) > 170; };
+  $('#cp-presets').innerHTML = PALETTE.map(c => `<button style="--c:${c}" class="${isLight(c) ? 'lt' : ''}" data-c="${c}" aria-label="${colorName(c)}"></button>`).join('');
+  $('#cp-presets').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) cpSet(b.dataset.c); });
+  function cpSlider(el, onPos) {
+    const go = e => { const r = el.getBoundingClientRect(); onPos(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))); };
+    el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); el.classList.add('drag'); go(e); });
+    el.addEventListener('pointermove', e => { if (el.hasPointerCapture(e.pointerId)) go(e); });
+    const up = () => el.classList.remove('drag');
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
+  cpSlider($('#cp-hue'), x => { cp.h = x * 359.9; cpSet(hslToHex(cp.h, cp.l >= 99 ? 0 : SAT, cp.l), true); });
+  cpSlider($('#cp-light'), x => { cp.l = 30 + x * 70; cpSet(hslToHex(cp.h, SAT, cp.l), true); });
+  function openColor(k, title) {
+    cp.k = k;
+    $('#cp-title').textContent = title;
+    cpSet(state[k] || '#FFFFFF');
+    cpEl.classList.add('show');
+  }
+  function closeColor() {
+    if (!cpOpen()) return;
+    cpEl.classList.remove('show');
+    save(); renderSettings();
+    globe.dirty = true; plan.redraw(); mini.redraw();
+  }
+  $('#colors-card').addEventListener('click', e => { const b = e.target.closest('.crow2'); if (b) openColor(b.dataset.k, b.dataset.t); });
+  $('#cp-done').onclick = closeColor;
+  cpEl.querySelector('.cp-scrim').onclick = closeColor;
   $('#show-wish').addEventListener('change', e => {
     state.showWish = e.target.checked; save(); renderSettings();
     globe.dirty = true; plan.redraw(); mini.redraw();
   });
-  const CITY_COLORS = ['#FFC93C', '#FFFFFF', '#FF6B6B', '#4CC9F0', '#B388FF', '#FF9F1C', '#7CFFB2', '#FF4FD8'];
-  $('#city-swatches').addEventListener('click', e => {
-    const b = e.target.closest('[data-city-color]');
-    if (!b) return;
-    state.cityColor = b.dataset.cityColor; save(); applyTheme(); renderSettings();
-  });
-  const setColor = c => { state.color = c; save(); applyTheme(); renderSettings(); };
-  $('#swatches').addEventListener('click', e => { const b = e.target.closest('[data-color]'); b && setColor(b.dataset.color); });
-  $('#custom-color').addEventListener('input', e => { state.color = e.target.value; applyTheme(); });
-  $('#custom-color').addEventListener('change', e => setColor(e.target.value));
   $('#theme').addEventListener('click', e => {
     const b = e.target.closest('[data-theme]');
     if (!b) return;
@@ -2416,6 +2466,7 @@
   try {
     Plugins.App && Plugins.App.addListener('backButton', () => {
       if ($('#confirm').classList.contains('show')) return closeConfirm(false);
+      if (cpOpen()) return closeColor();
       if ($('#onboard').classList.contains('show')) { if (!onboardFirst) closeOnboard(); return; }
       if ($('#years').classList.contains('show')) return yearResolve ? closeYears(undefined) : hideModal();
       if (story.open) return closeViewer();
