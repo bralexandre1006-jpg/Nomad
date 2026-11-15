@@ -2308,6 +2308,7 @@
     let last = Date.now();
     DB.addListener('progress', d => {
       last = Date.now();
+      if (d.phase === 'end') { close(); return; }
       if (d.phase === 'info') { $('#imp-file').textContent = d.text; return; }
       $('#imp-count').textContent = d.total ? `${d.done} / ${d.total}` : (d.phase === 'upload' ? 'À jour' : '…');
       $('#imp-file').textContent = d.text || (d.phase === 'upload' ? 'Envoi des photos et vidéos' : 'Téléchargement des photos et vidéos');
@@ -2319,8 +2320,15 @@
     $('#imp-cancel').hidden = false;
     $('#imp-cancel').disabled = false;
     $('#imp-note').hidden = false;
-    $('#imp-cancel').onclick = () => { $('#imp-cancel').disabled = true; DB.cancel().catch(() => {}); };
-    return () => { clearInterval(wd); $('#imp-note').hidden = true; ov.classList.remove('show'); $('#imp-cancel').hidden = false; if (h) h.remove(); };
+    $('#imp-cancel').onclick = () => { $('#imp-cancel').disabled = true; DB.cancel().catch(() => {}); setTimeout(close, 2500); };
+    let closed = false;
+    function close() {
+      if (closed) return;
+      closed = true;
+      clearInterval(wd); $('#imp-note').hidden = true; ov.classList.remove('show'); $('#imp-cancel').hidden = false;
+      if (h) h.remove(); else setTimeout(() => h && h.remove(), 500);
+    }
+    return close;
   }
   async function ensureNotif() {
     try {
@@ -2329,8 +2337,20 @@
       if (await ask('Active les notifications de Nomad pour suivre la sauvegarde quand l\'app est en arrière-plan.', 'Ouvrir les réglages')) await DB.openNotifSettings();
     } catch (e) {}
   }
+  let driveJob = null;
   async function driveBackup(silent) {
     if (!driveOK()) return;
+    if (driveJob) {
+      if (silent) return;
+      const done = driveProgress('Sauvegarde');
+      await driveJob.catch(() => {});
+      done(); renderDrive();
+      return;
+    }
+    driveJob = driveRun(silent);
+    try { await driveJob; } finally { driveJob = null; }
+  }
+  async function driveRun(silent) {
     if (!silent) await ensureNotif();
     const { payload, count } = await backupPayload();
     const done = silent ? () => {} : driveProgress('Sauvegarde');
@@ -2343,6 +2363,7 @@
     } catch (e) {
       const m = String(e && e.message || e);
       if (/NEED_SIGNIN/.test(m)) { state.drive.on = false; save(); }
+      if (/BUSY/.test(m)) return;
       if (!silent) await ask(m.replace('NEED_SIGNIN', 'Reconnecte-toi à Google.'), 'OK', true);
     } finally { done(); renderDrive(); }
   }

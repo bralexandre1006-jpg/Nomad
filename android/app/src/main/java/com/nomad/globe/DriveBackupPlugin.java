@@ -51,6 +51,14 @@ public class DriveBackupPlugin extends Plugin {
     private Runnable pendingNext;
     private volatile String token;
     private volatile boolean cancelled = false;
+    private final java.util.concurrent.atomic.AtomicBoolean busy = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    private void end() {
+        busy.set(false);
+        JSObject p = new JSObject();
+        p.put("phase", "end");
+        notifyListeners("progress", p);
+    }
 
     @PluginMethod
     public void cancel(PluginCall call) {
@@ -114,9 +122,10 @@ public class DriveBackupPlugin extends Plugin {
             try {
                 AuthorizationResult ar = Identity.getAuthorizationClient(getActivity()).getAuthorizationResultFromIntent(res.getData());
                 token = ar.getAccessToken();
-                if (token == null) { c.reject("Connexion annulée"); return; }
+                if (token == null) { end(); c.reject("Connexion annulée"); return; }
                 next.run();
             } catch (Throwable e) {
+                end();
                 c.reject("Connexion annulée");
             }
         });
@@ -130,7 +139,7 @@ public class DriveBackupPlugin extends Plugin {
             .addOnSuccessListener(ar -> {
                 try {
                 if (ar.hasResolution()) {
-                    if (!interactive || ar.getPendingIntent() == null) { call.reject("NEED_SIGNIN"); return; }
+                    if (!interactive || ar.getPendingIntent() == null) { end(); call.reject("NEED_SIGNIN"); return; }
                     pendingCall = call;
                     pendingNext = next;
                     launcher.launch(new IntentSenderRequest.Builder(ar.getPendingIntent().getIntentSender()).build());
@@ -138,9 +147,9 @@ public class DriveBackupPlugin extends Plugin {
                     token = ar.getAccessToken();
                     next.run();
                 }
-                } catch (Throwable e) { call.reject("Connexion Google impossible : " + e.getMessage()); }
+                } catch (Throwable e) { end(); call.reject("Connexion Google impossible : " + e.getMessage()); }
             })
-            .addOnFailureListener(e -> call.reject("Connexion Google impossible : " + e.getMessage()));
+            .addOnFailureListener(e -> { end(); call.reject("Connexion Google impossible : " + e.getMessage()); });
     }
 
     @PluginMethod
@@ -170,6 +179,7 @@ public class DriveBackupPlugin extends Plugin {
                 return;
             }
         }
+        if (!busy.compareAndSet(false, true)) { call.reject("BUSY"); return; }
         cancelled = false;
         phase("Autorisation Google…");
         authorize(call, interactive, () -> {
@@ -229,9 +239,11 @@ public class DriveBackupPlugin extends Plugin {
             r.put("uploaded", done);
             r.put("files", local.length);
             BackupService.stop(getContext(), "Sauvegarde Nomad terminée");
+            end();
             call.resolve(r);
         } catch (Throwable e) {
             BackupService.stop(getContext(), cancelled ? null : "Sauvegarde Nomad interrompue");
+            end();
             call.reject("Sauvegarde impossible : " + e.getMessage());
         }
     }
@@ -240,7 +252,7 @@ public class DriveBackupPlugin extends Plugin {
         try {
             phase("Lecture de ton Google Drive…");
             Map<String, String> remote = list();
-            if (!remote.containsKey(DATA)) { call.reject("Aucune sauvegarde trouvée sur ce compte Google"); return; }
+            if (!remote.containsKey(DATA)) { BackupService.stop(getContext(), null); end(); call.reject("Aucune sauvegarde trouvée sur ce compte Google"); return; }
             String json = new String(downloadBytes(remote.get(DATA)), StandardCharsets.UTF_8);
             JSONObject d = new JSONObject(json);
             JSONArray photos = d.optJSONArray("photos");
@@ -270,9 +282,11 @@ public class DriveBackupPlugin extends Plugin {
             r.put("data", json);
             r.put("downloaded", done);
             BackupService.stop(getContext(), "Restauration Nomad terminée");
+            end();
             call.resolve(r);
         } catch (Throwable e) {
             BackupService.stop(getContext(), cancelled ? null : "Restauration Nomad interrompue");
+            end();
             call.reject("Restauration impossible : " + e.getMessage());
         }
     }
