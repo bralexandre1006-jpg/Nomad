@@ -1232,7 +1232,7 @@
     const a = sheetEl.animate([{ transform: from }, { transform: 'translateY(105%)' }], { duration: 320, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' });
     a.onfinish = () => { if (!sheet.open) sheetEl.classList.remove('show'); a.cancel(); };
     globe.selected = null; globe.dirty = true;
-    if (globe.active && !placing) { if (keepZoom === true) globe.recenter(); else globe.unfocus(); }
+    if (globe.active && !placing) globe.recenter();
     plan.select(null);
     setTimeout(() => { if (!sheet.open) sheet.photos = []; }, 400);
   }
@@ -2411,7 +2411,8 @@
   renderSettings();
   renderCounters();
   syncMode();
-  if (state.home && byCode.has(state.home)) playIntro(); else openOnboard(true);
+  if (state.home && byCode.has(state.home)) playIntro();
+  else { $("#intro").classList.remove("show"); document.body.classList.remove("intro"); openOnboard(true); }
   window.addEventListener('resize', () => {
     globe.resize();
     plan.invalidate(); mini.invalidate();
