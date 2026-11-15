@@ -2275,6 +2275,8 @@
     $('#drive-backup').hidden = !d.on;
     $('#drive-auto-row').hidden = !d.on;
     $('#drive-auto').checked = d.auto;
+    $('#drive-mobile-row').hidden = !d.on || !d.auto;
+    $('#drive-mobile').checked = !!d.mobile;
   }
   async function backupPayload() {
     const photos = [];
@@ -2315,7 +2317,7 @@
     const { payload, count } = await backupPayload();
     const done = silent ? () => {} : driveProgress('Sauvegarde');
     try {
-      const r = await DB.backup({ data: payload, wifiOnly: !!silent, interactive: !silent });
+      const r = await DB.backup({ data: payload, wifiOnly: !!silent && !state.drive.mobile, interactive: !silent });
       if (r && r.skipped) return;
       state.drive.on = true; state.drive.last = Date.now(); state.drive.count = count;
       save();
@@ -2335,7 +2337,8 @@
     } catch (e) { await ask(`Connexion impossible. ${String(e && e.message || e)}`, 'OK', true); }
   };
   $('#drive-backup').onclick = () => driveBackup(false);
-  $('#drive-auto').addEventListener('change', e => { state.drive.auto = e.target.checked; save(); });
+  $('#drive-auto').addEventListener('change', e => { state.drive.auto = e.target.checked; save(); renderDrive(); });
+  $('#drive-mobile').addEventListener('change', e => { state.drive.mobile = e.target.checked; save(); });
   $('#drive-restore').onclick = async () => {
     if (!driveOK()) return toast('Disponible dans l\'app Android');
     if (!await ask('Restaurer la sauvegarde Google Drive ? Elle s\'ajoute à ce qui est déjà sur ce téléphone.', 'Restaurer')) return;
